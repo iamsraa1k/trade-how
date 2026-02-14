@@ -1,0 +1,16 @@
+[
+  {
+    "date": "2026-02-10",
+    "time": "00:00",
+    "symbol": "NIFTY",
+    "type": "sell",
+    "entryPrice": 100,
+    "exitPrice": 32,
+    "quantity": 65,
+    "fees": 299,
+    "pnl": 4121,
+    "analysis": "Exited early due to FOMO",
+    "emotions": "FOMO",
+    "id": "09afa332-cd32-49dd-a9ab-dff0029fa16f"
+  }
+]
