@@ -308,7 +308,7 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
                             <CardHeader className="pb-2">
                                 <CardTitle className="text-lg sm:text-xl text-center sm:text-left">Win Rate</CardTitle>
                             </CardHeader>
-                            <CardContent className="flex-1 flex flex-col sm:flex-row items-center justify-center p-4 gap-4 sm:gap-8">
+                            <CardContent className="flex-1 flex flex-col items-center justify-center p-4">
                                 <div className="h-[250px] w-full min-h-[250px] relative flex-shrink-0 flex items-center justify-center">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
@@ -332,23 +332,19 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
                                         </PieChart>
                                     </ResponsiveContainer>
                                 </div>
-                                <div className="flex flex-col gap-3 justify-center min-w-[120px]">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm"></div>
-                                            <span className="text-sm font-medium">Wins</span>
-                                        </div>
-                                        <span className="text-sm font-bold bg-muted px-2 py-0.5 rounded">{metrics.winningTrades}</span>
+                            </CardContent>
+                            <div className="p-4 border-t border-zinc-100 dark:border-zinc-800/50">
+                                <div className="flex flex-wrap justify-center gap-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm"></div>
+                                        <span className="text-sm font-medium">Wins: {metrics.winningTrades}</span>
                                     </div>
-                                    <div className="flex items-center justify-between gap-3">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-3 h-3 rounded-full bg-red-500 shadow-sm"></div>
-                                            <span className="text-sm font-medium">Losses</span>
-                                        </div>
-                                        <span className="text-sm font-bold bg-muted px-2 py-0.5 rounded">{metrics.losingTrades}</span>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-3 h-3 rounded-full bg-red-500 shadow-sm"></div>
+                                        <span className="text-sm font-medium">Losses: {metrics.losingTrades}</span>
                                     </div>
                                 </div>
-                            </CardContent>
+                            </div>
                         </Card>
                     </motion.div>
 
@@ -363,7 +359,7 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
                             <CardHeader className="pb-2">
                                 <CardTitle className="text-lg sm:text-xl text-center sm:text-left">Mistakes</CardTitle>
                             </CardHeader>
-                            <CardContent className="flex-1 flex flex-col sm:flex-row items-center justify-center p-4 gap-4 sm:gap-8">
+                            <CardContent className="flex-1 flex flex-col items-center justify-center p-4">
                                 <div className="h-[250px] w-full min-h-[250px] relative flex-shrink-0 flex items-center justify-center">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
@@ -388,22 +384,21 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
                                         </PieChart>
                                     </ResponsiveContainer>
                                 </div>
-                                <div className="flex flex-col gap-2 justify-center max-h-[180px] overflow-y-auto min-w-[120px] custom-scrollbar pr-1">
+                            </CardContent>
+                            <div className="p-4 border-t border-zinc-100 dark:border-zinc-800/50">
+                                <div className="flex flex-wrap gap-2 justify-center max-h-[100px] overflow-y-auto custom-scrollbar">
                                     {metrics.mistakesData.map((entry, index) => (
-                                        <div key={index} className="flex items-center justify-between gap-3">
-                                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                                                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }}></div>
-                                                <span className="text-sm font-medium truncate max-w-[100px]" title={entry.name}>{entry.name}</span>
-                                            </div>
-                                            <span className="text-sm font-bold bg-muted px-2 py-0.5 rounded">{entry.value}</span>
+                                        <div key={index} className="flex items-center gap-2 bg-muted/50 px-2 py-1 rounded-full border border-zinc-200 dark:border-zinc-800">
+                                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }}></div>
+                                            <span className="text-xs font-medium max-w-[100px] truncate" title={entry.name}>{entry.name}</span>
+                                            <span className="text-xs font-bold opacity-75">{entry.value}</span>
                                         </div>
                                     ))}
                                 </div>
-                            </CardContent>
+                            </div>
                         </Card>
                     </motion.div>
                 </div>
-
             </div>
 
             {/* Edit Trade Modal */}
@@ -433,7 +428,7 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div>
+        </div >
     )
 }
 
