@@ -35,6 +35,9 @@ export function TradeForm() {
         date: new Date().toISOString().split('T')[0]
     })
 
+    // Track auto-calculated PNL separately to detect manual overrides
+    const [calculatedPnl, setCalculatedPnl] = React.useState<number | null>(null)
+
     const handleInput = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target
 
@@ -60,7 +63,12 @@ export function TradeForm() {
 
                     const finalPnl = rawPnl - fees
                     newData.pnl = finalPnl.toFixed(2)
+                    setCalculatedPnl(finalPnl)
+                } else {
+                    setCalculatedPnl(null)
                 }
+            } else if (name === 'pnl') {
+                // User is manually updating PNL, we don't recalculate entry/exit
             }
             return newData
         })
@@ -148,25 +156,25 @@ export function TradeForm() {
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-muted/20 p-4 rounded-lg border border-border/50">
                             <div className="space-y-2">
-                                <Label htmlFor="entry">Entry Price (₹)</Label>
+                                <Label htmlFor="entry">Entry Price (₹) <span className="text-xs text-muted-foreground font-normal">(Optional)</span></Label>
                                 <Input
-                                    type="number" name="entry" id="entry" placeholder="0.00" step="any" required
+                                    type="number" name="entry" id="entry" placeholder="0.00" step="any"
                                     className="bg-background font-mono"
                                     value={formData.entry} onChange={handleInput}
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="exit">Exit Price (₹)</Label>
+                                <Label htmlFor="exit">Exit Price (₹) <span className="text-xs text-muted-foreground font-normal">(Optional)</span></Label>
                                 <Input
-                                    type="number" name="exit" id="exit" placeholder="0.00" step="any" required
+                                    type="number" name="exit" id="exit" placeholder="0.00" step="any"
                                     className="bg-background font-mono"
                                     value={formData.exit} onChange={handleInput}
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="quantity">Quantity / Lots</Label>
+                                <Label htmlFor="quantity">Quantity / Lots <span className="text-xs text-muted-foreground font-normal">(Optional)</span></Label>
                                 <Input
-                                    type="number" name="quantity" id="quantity" placeholder="1" required
+                                    type="number" name="quantity" id="quantity" placeholder="1"
                                     className="bg-background font-mono"
                                     value={formData.quantity} onChange={handleInput}
                                 />
@@ -189,7 +197,7 @@ export function TradeForm() {
                         </h3>
                         <div className="bg-muted/20 p-4 rounded-lg border border-border/50 flex flex-col md:flex-row gap-6 items-center">
                             <div className="flex-1 w-full relative">
-                                <Label htmlFor="pnl" className="text-base mb-2 block">Realized P/L (Auto-Calc)</Label>
+                                <Label htmlFor="pnl" className="text-base mb-2 block">Realized P/L</Label>
                                 <div className="relative">
                                     <Calculator className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                                     <Input
@@ -201,12 +209,19 @@ export function TradeForm() {
                                         className={`pl-10 font-bold text-2xl h-16 transition-colors ${parseFloat(formData.pnl) > 0 ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-500 text-emerald-600' : parseFloat(formData.pnl) < 0 ? 'bg-red-50 dark:bg-red-950/20 border-red-500 text-red-600' : 'bg-background'}`}
                                         required
                                         value={formData.pnl}
-                                        readOnly
+                                        onChange={handleInput}
                                     />
                                 </div>
-                                <p className="text-sm text-muted-foreground mt-2">
-                                    {formData.type === 'buy' ? '(Exit - Entry) * Qty - Fees' : '(Entry - Exit) * Qty - Fees'}
-                                </p>
+                                <div className="flex flex-col mt-2 space-y-1.5 min-h-[40px]">
+                                    <p className="text-sm text-muted-foreground">
+                                        {formData.type === 'buy' ? '(Exit - Entry) * Qty - Fees' : '(Entry - Exit) * Qty - Fees'}
+                                    </p>
+                                    {calculatedPnl !== null && formData.pnl !== "" && calculatedPnl.toFixed(2) !== parseFloat(formData.pnl).toFixed(2) && (
+                                        <p className="text-sm text-red-500 font-medium">
+                                            Warning: Entered P/L does not match calculated P/L based on Entry/Exit.
+                                        </p>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>

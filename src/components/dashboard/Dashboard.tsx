@@ -42,11 +42,11 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
     const customRangePnl = useMemo(() => {
         if (!customStartDate || !customEndDate) return null;
         if (customStartDate > customEndDate) return null;
-        
+
         const relevantTrades = trades.filter(t => {
             return t.date >= customStartDate && t.date <= customEndDate;
         });
-        
+
         return relevantTrades.reduce((acc, t) => acc + t.pnl, 0);
     }, [trades, customStartDate, customEndDate])
 
@@ -255,30 +255,6 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
                         </Button>
                     </div>
                 </div>
-
-                {/* Custom Date Range P/L */}
-                <div className="flex-1 flex flex-col sm:flex-row justify-between items-center bg-card p-4 rounded-lg shadow-sm border border-zinc-200 dark:border-zinc-800 gap-4">
-                    <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-                        <div className="flex items-center gap-2 w-full sm:w-auto justify-center sm:justify-start">
-                            <Label htmlFor="custom-start" className="text-xs text-muted-foreground whitespace-nowrap">From</Label>
-                            <Input type="date" id="custom-start" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-8 text-sm w-[130px]" />
-                        </div>
-                        <div className="flex items-center gap-2 w-full sm:w-auto justify-center sm:justify-start">
-                            <Label htmlFor="custom-end" className="text-xs text-muted-foreground whitespace-nowrap">To</Label>
-                            <Input type="date" id="custom-end" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-8 text-sm w-[130px]" />
-                        </div>
-                    </div>
-                    <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3 w-full sm:w-auto text-center sm:text-right">
-                        <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Custom Range P/L:</span>
-                        <span className={`text-xl sm:text-2xl font-bold ${customRangePnl === null ? 'text-muted-foreground' : customRangePnl >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                            {customRangePnl !== null ? (
-                                <>{customRangePnl >= 0 ? '+' : ''}{customRangePnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}</>
-                            ) : (
-                                "---"
-                            )}
-                        </span>
-                    </div>
-                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 flex-1">
@@ -453,6 +429,30 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
                 </div>
             </div>
 
+            {/* Custom Date Range P/L - Moved to Bottom */}
+            <div className="flex flex-col sm:flex-row justify-between items-center bg-card p-4 rounded-lg shadow-sm border border-zinc-200 dark:border-zinc-800 gap-4 mt-2">
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-center sm:justify-start">
+                        <Label htmlFor="custom-start" className="text-xs text-muted-foreground whitespace-nowrap">From</Label>
+                        <Input type="date" id="custom-start" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-8 text-sm w-[130px]" />
+                    </div>
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-center sm:justify-start">
+                        <Label htmlFor="custom-end" className="text-xs text-muted-foreground whitespace-nowrap">To</Label>
+                        <Input type="date" id="custom-end" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-8 text-sm w-[130px]" />
+                    </div>
+                </div>
+                <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3 w-full sm:w-auto text-center sm:text-right">
+                    <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Custom Range P/L:</span>
+                    <span className={`text-xl sm:text-2xl font-bold ${customRangePnl === null ? 'text-muted-foreground' : customRangePnl >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {customRangePnl !== null ? (
+                            <>{customRangePnl >= 0 ? '+' : ''}{customRangePnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}</>
+                        ) : (
+                            "---"
+                        )}
+                    </span>
+                </div>
+            </div>
+
             {/* Edit Trade Modal */}
             <TradeListModal
                 isOpen={isEditModalOpen}
@@ -575,6 +575,8 @@ function EditTradeForm({ trade, onCancel, onSuccess }: { trade: Trade, onCancel:
         date: trade.date
     })
 
+    const [calculatedPnl, setCalculatedPnl] = useState<number | null>(null)
+
     const handleInput = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target
         setFormData(prev => {
@@ -594,6 +596,9 @@ function EditTradeForm({ trade, onCancel, onSuccess }: { trade: Trade, onCancel:
                     }
                     const finalPnl = rawPnl - fees
                     newData.pnl = finalPnl.toFixed(2)
+                    setCalculatedPnl(finalPnl)
+                } else {
+                    setCalculatedPnl(null)
                 }
             }
             return newData
@@ -623,23 +628,28 @@ function EditTradeForm({ trade, onCancel, onSuccess }: { trade: Trade, onCancel:
                 </div>
                 <div className="space-y-1">
                     <Label htmlFor="entry">Entry</Label>
-                    <Input name="entry" type="number" step="any" value={formData.entry} onChange={handleInput} required />
+                    <Input name="entry" type="number" step="any" value={formData.entry} onChange={handleInput} />
                 </div>
                 <div className="space-y-1">
                     <Label htmlFor="exit">Exit</Label>
-                    <Input name="exit" type="number" step="any" value={formData.exit} onChange={handleInput} required />
+                    <Input name="exit" type="number" step="any" value={formData.exit} onChange={handleInput} />
                 </div>
                 <div className="space-y-1">
                     <Label htmlFor="quantity">Qty</Label>
-                    <Input name="quantity" type="number" value={formData.quantity} onChange={handleInput} required />
+                    <Input name="quantity" type="number" value={formData.quantity} onChange={handleInput} />
                 </div>
                 <div className="space-y-1">
                     <Label htmlFor="fees">Fees</Label>
                     <Input name="fees" type="number" step="any" value={formData.fees} onChange={handleInput} />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1 col-span-2">
                     <Label htmlFor="pnl">P/L</Label>
-                    <Input name="pnl" type="number" step="any" value={formData.pnl} readOnly className="font-bold bg-muted" />
+                    <Input name="pnl" type="number" step="any" value={formData.pnl} onChange={handleInput} className="font-bold bg-muted" />
+                    {calculatedPnl !== null && formData.pnl !== "" && calculatedPnl.toFixed(2) !== parseFloat(formData.pnl).toFixed(2) && (
+                        <p className="text-xs text-red-500 font-medium mt-1">
+                            Warning: Entered P/L does not match calculated P/L based on Entry/Exit.
+                        </p>
+                    )}
                 </div>
             </div>
             <div className="space-y-1">
