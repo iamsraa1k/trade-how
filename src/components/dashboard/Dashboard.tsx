@@ -35,6 +35,21 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
     // Removed local trades fetching
     const [currentMonth, setCurrentMonth] = useState(new Date())
 
+    // State for Custom Date Range PnL
+    const [customStartDate, setCustomStartDate] = useState<string>("")
+    const [customEndDate, setCustomEndDate] = useState<string>("")
+
+    const customRangePnl = useMemo(() => {
+        if (!customStartDate || !customEndDate) return null;
+        if (customStartDate > customEndDate) return null;
+        
+        const relevantTrades = trades.filter(t => {
+            return t.date >= customStartDate && t.date <= customEndDate;
+        });
+        
+        return relevantTrades.reduce((acc, t) => acc + t.pnl, 0);
+    }, [trades, customStartDate, customEndDate])
+
     // State for Edit Modal
     const [selectedDate, setSelectedDate] = useState<Date | null>(null)
     const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -214,18 +229,55 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
     const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1))
     const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1))
 
+    const totalMonthlyPnl = useMemo(() => {
+        return filteredTrades.reduce((acc, t) => acc + t.pnl, 0);
+    }, [filteredTrades]);
+
     return (
         <div className="space-y-6 h-full flex flex-col">
-            <div className="flex flex-col sm:flex-row justify-between items-center bg-card p-4 rounded-lg shadow-sm border border-zinc-200 dark:border-zinc-800 gap-4">
-                <div className="flex gap-2 w-full sm:w-auto">
-                    <Button variant="outline" size="sm" onClick={handleExportCSV} className="w-full sm:w-auto">
-                        <Download className="mr-2 h-4 w-4" />
-                        CSV Export
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={handleExportPDF} className="w-full sm:w-auto">
-                        <Download className="mr-2 h-4 w-4" />
-                        PDF Report
-                    </Button>
+            <div className="flex flex-col lg:flex-row gap-4 mb-2">
+                {/* Monthly Realized P/L */}
+                <div className="flex-1 flex flex-col sm:flex-row justify-between items-center bg-card p-4 rounded-lg shadow-sm border border-zinc-200 dark:border-zinc-800 gap-4">
+                    <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 w-full sm:w-auto text-center sm:text-left">
+                        <span className="text-sm font-medium text-muted-foreground sm:mr-2">Monthly Realized P/L:</span>
+                        <span className={`text-2xl sm:text-3xl font-bold ${totalMonthlyPnl >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {totalMonthlyPnl >= 0 ? '+' : ''}{totalMonthlyPnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
+                        </span>
+                    </div>
+                    <div className="flex gap-2 w-full sm:w-auto justify-center sm:justify-end">
+                        <Button variant="outline" size="sm" onClick={handleExportCSV} className="w-full sm:w-auto">
+                            <Download className="mr-2 h-4 w-4" />
+                            CSV Export
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={handleExportPDF} className="w-full sm:w-auto">
+                            <Download className="mr-2 h-4 w-4" />
+                            PDF Report
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Custom Date Range P/L */}
+                <div className="flex-1 flex flex-col sm:flex-row justify-between items-center bg-card p-4 rounded-lg shadow-sm border border-zinc-200 dark:border-zinc-800 gap-4">
+                    <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                        <div className="flex items-center gap-2 w-full sm:w-auto justify-center sm:justify-start">
+                            <Label htmlFor="custom-start" className="text-xs text-muted-foreground whitespace-nowrap">From</Label>
+                            <Input type="date" id="custom-start" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} className="h-8 text-sm w-[130px]" />
+                        </div>
+                        <div className="flex items-center gap-2 w-full sm:w-auto justify-center sm:justify-start">
+                            <Label htmlFor="custom-end" className="text-xs text-muted-foreground whitespace-nowrap">To</Label>
+                            <Input type="date" id="custom-end" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} className="h-8 text-sm w-[130px]" />
+                        </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3 w-full sm:w-auto text-center sm:text-right">
+                        <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Custom Range P/L:</span>
+                        <span className={`text-xl sm:text-2xl font-bold ${customRangePnl === null ? 'text-muted-foreground' : customRangePnl >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                            {customRangePnl !== null ? (
+                                <>{customRangePnl >= 0 ? '+' : ''}{customRangePnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}</>
+                            ) : (
+                                "---"
+                            )}
+                        </span>
+                    </div>
                 </div>
             </div>
 

@@ -72,7 +72,6 @@ export function TradeForm() {
         // Note: the input 'pnl' will be in the FormData because it has a name attribute
         try {
             await addNewTrade(data)
-            alert("Trade saved successfully!")
             router.push("/")
             router.refresh()
         } catch (error) {
