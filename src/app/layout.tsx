@@ -2,6 +2,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
 import { Providers } from "@/components/Providers";
+import { Toaster } from "@/components/ui/sonner";
 
 export const metadata = {
   title: "TradeHow",
@@ -28,6 +29,7 @@ export default function RootLayout({
         >
           <Providers>
             {children}
+            <Toaster />
           </Providers>
         </ThemeProvider>
       </body>

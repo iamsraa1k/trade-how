@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { UploadCloud, X, Save, Sparkles, ArrowRight, Calculator } from "lucide-react"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -16,6 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { addNewTrade } from "@/app/actions"
 import { useRouter } from "next/navigation"
+import { COMMON_MISTAKES } from "@/lib/constants"
 
 export function TradeForm() {
     const router = useRouter()
@@ -79,12 +81,17 @@ export function TradeForm() {
         // Ensure calculated P/L is sent if user didn't override it (though input is controlled now)
         // Note: the input 'pnl' will be in the FormData because it has a name attribute
         try {
-            await addNewTrade(data)
-            router.push("/")
-            router.refresh()
+            const result = await addNewTrade(data)
+            if (result?.error) {
+                toast.error(result.error)
+            } else {
+                toast.success("Trade saved successfully")
+                router.push("/")
+                router.refresh()
+            }
         } catch (error) {
             console.error(error)
-            alert("Failed to save trade")
+            toast.error("Failed to save trade due to network error")
         } finally {
             setIsSubmitting(false)
         }
@@ -246,15 +253,18 @@ export function TradeForm() {
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="emotions">Emotions / Mistakes (Mistake Chart Input)</Label>
-                                <Textarea
+                                <Label htmlFor="emotions">Emotions / Mistakes</Label>
+                                <select
                                     name="emotions"
                                     id="emotions"
-                                    placeholder="FOMO, Revenge trading, Early exit, Overtrading... (Comma separated)"
-                                    className="min-h-[60px] bg-background"
                                     value={formData.emotions}
                                     onChange={handleInput}
-                                />
+                                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {COMMON_MISTAKES.map(mistake => (
+                                        <option key={mistake.value} value={mistake.value}>{mistake.label}</option>
+                                    ))}
+                                </select>
                             </div>
 
                             <div className="space-y-2">

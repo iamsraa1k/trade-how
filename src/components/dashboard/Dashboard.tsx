@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
-import { Download, ChevronLeft, ChevronRight, Trash2, Check, X, Menu, User, LogOut } from "lucide-react"
+import { Download, ChevronLeft, ChevronRight, Trash2, Check, X, Menu, User, LogOut, Star } from "lucide-react"
+import { toast } from "sonner"
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay } from "date-fns"
 import {
     Dialog,
@@ -29,6 +30,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { COMMON_MISTAKES } from "@/lib/constants"
 
 
 export function Dashboard({ trades }: { trades: Trade[] }) {
@@ -85,6 +87,7 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
         })
 
         const mistakesData = Array.from(mistakesMap.entries())
+            .filter(([name]) => name !== "None / Flawless Execution" && name !== "None" && name !== "Flawless Execution") // Exclude flawless
             .map(([name, value], index) => ({
                 name,
                 value,
@@ -294,6 +297,10 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
                                     const pnl = getPnlForDay(day)
                                     const isPositive = pnl !== null && pnl > 0
 
+                                    // Check if all trades for this day are flawless
+                                    const tradesForThatDay = trades.filter(t => t.date === format(day, "yyyy-MM-dd"))
+                                    const allFlawless = tradesForThatDay.length > 0 && tradesForThatDay.every(t => !t.emotions || t.emotions === "" || t.emotions === "None / Flawless Execution")
+
                                     return (
                                         <motion.div
                                             key={day.toString()}
@@ -306,7 +313,10 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
                                         ${pnl !== null ? (isPositive ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-red-500/10 border-red-500/30') : 'hover:bg-accent border-muted'}
                                     `}
                                         >
-                                            <span className="text-[10px] sm:text-xs font-medium text-muted-foreground group-hover:text-foreground pl-1">{format(day, 'd')}</span>
+                                            <div className="flex justify-between items-start">
+                                                <span className="text-[10px] sm:text-xs font-medium text-muted-foreground group-hover:text-foreground pl-1">{format(day, 'd')}</span>
+                                                {allFlawless && <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />}
+                                            </div>
                                             {pnl !== null && (
                                                 <div className="flex flex-col items-center justify-center flex-1 w-full overflow-hidden">
                                                     <span className={`hidden sm:block text-xs md:text-sm font-bold tracking-tight truncate w-full text-center ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
@@ -474,7 +484,11 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setTradeToDelete(null)}>Cancel</Button>
                         <Button variant="destructive" onClick={async () => {
-                            if (tradeToDelete) await deleteTradeAction(tradeToDelete);
+                            if (tradeToDelete) {
+                                const result = await deleteTradeAction(tradeToDelete);
+                                if (result?.error) toast.error(result.error);
+                                else toast.success("Trade deleted successfully");
+                            }
                             setTradeToDelete(null);
                         }}>Delete</Button>
                     </DialogFooter>
@@ -530,7 +544,9 @@ function TradeListModal({ isOpen, onClose, date, trades, setTradeToDelete }: { i
                                                     <div className="flex items-center gap-1 animate-in fade-in zoom-in duration-200">
                                                         <span className="text-xs text-red-500 font-bold mr-1">Sure?</span>
                                                         <Button size="sm" variant="destructive" className="h-7 w-7 p-0 rounded-full" onClick={async () => {
-                                                            await deleteTradeAction(trade.id);
+                                                            const result = await deleteTradeAction(trade.id);
+                                                            if (result?.error) toast.error(result.error);
+                                                            else toast.success("Trade deleted successfully");
                                                             setConfirmDeleteId(null);
                                                         }}>
                                                             <Check className="h-3 w-3" />
@@ -607,8 +623,13 @@ function EditTradeForm({ trade, onCancel, onSuccess }: { trade: Trade, onCancel:
 
     return (
         <form action={async (data) => {
-            await updateTradeAction(trade.id, data)
-            onSuccess()
+            const result = await updateTradeAction(trade.id, data)
+            if (result?.error) {
+                toast.error(result.error)
+            } else {
+                toast.success("Trade updated successfully")
+                onSuccess()
+            }
         }} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
@@ -658,7 +679,11 @@ function EditTradeForm({ trade, onCancel, onSuccess }: { trade: Trade, onCancel:
             </div>
             <div className="space-y-1">
                 <Label htmlFor="emotions">Mistakes/Emotions</Label>
-                <Textarea name="emotions" value={formData.emotions} onChange={handleInput} rows={1} />
+                <select name="emotions" value={formData.emotions} onChange={handleInput} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                    {COMMON_MISTAKES.map(mistake => (
+                        <option key={mistake.value} value={mistake.value}>{mistake.label}</option>
+                    ))}
+                </select>
             </div>
             <div className="flex justify-end gap-2 pt-2">
                 <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
