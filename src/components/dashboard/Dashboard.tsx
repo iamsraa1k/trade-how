@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useMemo } from "react"
-import type { Trade } from "@/lib/db"
+import type { Trade, Rule } from "@/lib/db"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts"
 import { motion, AnimatePresence } from "framer-motion"
@@ -30,16 +30,28 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { COMMON_MISTAKES } from "@/lib/constants"
+import { addRuleAction, deleteRuleAction } from "@/app/actions"
 
 
-export function Dashboard({ trades }: { trades: Trade[] }) {
+export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] }) {
     // Removed local trades fetching
     const [currentMonth, setCurrentMonth] = useState(new Date())
 
-    // State for Custom Date Range PnL
     const [customStartDate, setCustomStartDate] = useState<string>("")
     const [customEndDate, setCustomEndDate] = useState<string>("")
+
+    const [isRulesModalOpen, setIsRulesModalOpen] = useState(false)
+    const [newRuleText, setNewRuleText] = useState("")
+    const [isAddingRule, setIsAddingRule] = useState(false)
+
+    const handleAddRule = async () => {
+        if (!newRuleText.trim() || isAddingRule) return;
+        setIsAddingRule(true);
+        const result = await addRuleAction(newRuleText.trim());
+        setIsAddingRule(false);
+        if (result?.error) toast.error(result.error);
+        else { toast.success("Rule added"); setNewRuleText(""); }
+    }
 
     const customRangePnl = useMemo(() => {
         if (!customStartDate || !customEndDate) return null;
@@ -75,32 +87,30 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
         const losingTrades = filteredTrades.filter((t) => t.pnl <= 0).length
         const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0
 
-        // Calculate mistakes distribution
-        const mistakesMap = new Map<string, number>()
+        // Calculate rules distribution instead of mistakes
+        const rulesMap = new Map<string, number>()
         filteredTrades.forEach(t => {
-            if (t.emotions) {
-                const mistakes = t.emotions.split(',').map(s => s.trim()).filter(s => s.length > 0)
-                mistakes.forEach(m => {
-                    mistakesMap.set(m, (mistakesMap.get(m) || 0) + 1)
+            if (t.rules && Array.isArray(t.rules)) {
+                t.rules.forEach(r => {
+                    rulesMap.set(r, (rulesMap.get(r) || 0) + 1)
                 })
             }
         })
 
-        const mistakesData = Array.from(mistakesMap.entries())
-            .filter(([name]) => name !== "None / Flawless Execution" && name !== "None" && name !== "Flawless Execution") // Exclude flawless
+        const rulesData = Array.from(rulesMap.entries())
             .map(([name, value], index) => ({
                 name,
                 value,
-                color: [`#f59e0b`, `#3b82f6`, `#8b5cf6`, `#ec4899`, `#14b8a6`][index % 5]
+                color: [`#10b981`, `#3b82f6`, `#8b5cf6`, `#f59e0b`, `#ec4899`, `#14b8a6`][index % 6]
             }))
             .sort((a, b) => b.value - a.value)
-            .slice(0, 5)
+            .slice(0, 10)
 
         return {
             winningTrades,
             losingTrades,
             winRate,
-            mistakesData: mistakesData.length > 0 ? mistakesData : [{ name: "No Data", value: 1, color: "#e5e7eb" }]
+            rulesData: rulesData.length > 0 ? rulesData : [{ name: "No Data", value: 1, color: "#e5e7eb" }]
         }
     }, [filteredTrades])
 
@@ -143,7 +153,7 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
         const csvContent = [
             headers.join(","),
             ...trades.map(t => [
-                t.id, t.date, t.symbol, t.type, t.entryPrice, t.exitPrice, t.quantity, t.fees, t.pnl, `"${t.analysis?.replace(/"/g, '""') || ''}"`, `"${t.emotions?.replace(/"/g, '""') || ''}"`
+                t.id, t.date, t.symbol, t.type, t.entryPrice, t.exitPrice, t.quantity, t.fees, t.pnl, `"${t.analysis?.replace(/"/g, '""') || ''}"`, `"${(t.rules || []).join(', ')}"`
             ].join(","))
         ].join("\n")
 
@@ -247,7 +257,11 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
                             {totalMonthlyPnl >= 0 ? '+' : ''}{totalMonthlyPnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                         </span>
                     </div>
-                    <div className="flex gap-2 w-full sm:w-auto justify-center sm:justify-end">
+                    <div className="flex gap-2 w-full sm:w-auto justify-center sm:justify-end flex-wrap">
+                        <Button variant="outline" size="sm" onClick={() => setIsRulesModalOpen(true)} className="w-full sm:w-auto">
+                            <Check className="mr-2 h-4 w-4" />
+                            Manage Rules
+                        </Button>
                         <Button variant="outline" size="sm" onClick={handleExportCSV} className="w-full sm:w-auto">
                             <Download className="mr-2 h-4 w-4" />
                             CSV Export
@@ -297,9 +311,11 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
                                     const pnl = getPnlForDay(day)
                                     const isPositive = pnl !== null && pnl > 0
 
-                                    // Check if all trades for this day are flawless
+                                    // Check if all rules were followed for a perfect trade day (only if rules exist)
                                     const tradesForThatDay = trades.filter(t => t.date === format(day, "yyyy-MM-dd"))
-                                    const allFlawless = tradesForThatDay.length > 0 && tradesForThatDay.every(t => !t.emotions || t.emotions === "" || t.emotions === "None / Flawless Execution")
+                                    const allFlawless = tradesForThatDay.length > 0 && rules.length > 0 && tradesForThatDay.every(t =>
+                                        rules.every(r => (t.rules || []).includes(r.text))
+                                    )
 
                                     return (
                                         <motion.div
@@ -386,7 +402,7 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
                         </Card>
                     </motion.div>
 
-                    {/* Mistakes Chart */}
+                    {/* Rules Chart */}
                     <motion.div
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
@@ -395,14 +411,14 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
                     >
                         <Card className="h-full border-zinc-200 dark:border-zinc-800 shadow-lg flex flex-col">
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-lg sm:text-xl text-center sm:text-left">Mistakes</CardTitle>
+                                <CardTitle className="text-lg sm:text-xl text-center sm:text-left">Discipline (Rules Followed)</CardTitle>
                             </CardHeader>
                             <CardContent className="flex-1 flex flex-col items-center justify-center p-4">
                                 <div className="h-[250px] w-full min-h-[250px] relative flex-shrink-0 flex items-center justify-center">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
                                             <Pie
-                                                data={metrics.mistakesData}
+                                                data={metrics.rulesData}
                                                 cx="50%"
                                                 cy="50%"
                                                 innerRadius={60}
@@ -411,7 +427,7 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
                                                 dataKey="value"
                                                 stroke="none"
                                             >
-                                                {metrics.mistakesData.map((entry, index) => (
+                                                {metrics.rulesData.map((entry, index) => (
                                                     <Cell key={`cell-${index}`} fill={entry.color} />
                                                 ))}
                                             </Pie>
@@ -425,10 +441,10 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
                             </CardContent>
                             <div className="p-4 border-t border-zinc-100 dark:border-zinc-800/50">
                                 <div className="flex flex-wrap gap-2 justify-center max-h-[100px] overflow-y-auto custom-scrollbar">
-                                    {metrics.mistakesData.map((entry, index) => (
+                                    {metrics.rulesData.map((entry, index) => (
                                         <div key={index} className="flex items-center gap-2 bg-muted/50 px-2 py-1 rounded-full border border-zinc-200 dark:border-zinc-800">
                                             <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }}></div>
-                                            <span className="text-xs font-medium max-w-[100px] truncate" title={entry.name}>{entry.name}</span>
+                                            <span className="text-xs font-medium max-w-[150px] truncate" title={entry.name}>{entry.name}</span>
                                             <span className="text-xs font-bold opacity-75">{entry.value}</span>
                                         </div>
                                     ))}
@@ -470,6 +486,7 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
                 date={selectedDate}
                 trades={trades.filter(t => selectedDate && t.date === format(selectedDate, "yyyy-MM-dd"))}
                 setTradeToDelete={setTradeToDelete}
+                rules={rules}
             />
 
             {/* Delete Confirmation Dialog */}
@@ -494,11 +511,55 @@ export function Dashboard({ trades }: { trades: Trade[] }) {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+            {/* Rules Management Modal */}
+            <Dialog open={isRulesModalOpen} onOpenChange={setIsRulesModalOpen}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Manage Discipline Rules</DialogTitle>
+                        <DialogDescription>
+                            Define custom rules for your trading plan. You can check these off when logging trades.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="flex items-center gap-2">
+                            <Input
+                                placeholder="E.g., Wait for candle to close"
+                                value={newRuleText}
+                                onChange={(e) => setNewRuleText(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && newRuleText.trim() && !isAddingRule) {
+                                        handleAddRule();
+                                    }
+                                }}
+                            />
+                            <Button disabled={!newRuleText.trim() || isAddingRule} onClick={handleAddRule}>Add</Button>
+                        </div>
+                        <div className="max-h-[300px] overflow-y-auto space-y-2 border rounded-md p-2 bg-muted/20">
+                            {rules.length === 0 ? (
+                                <p className="text-sm text-center text-muted-foreground p-4">No rules defined yet.</p>
+                            ) : (
+                                rules.map(rule => (
+                                    <div key={rule.id} className="flex items-center justify-between p-2 bg-background border rounded-md shadow-sm">
+                                        <span className="text-sm font-medium">{rule.text}</span>
+                                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={async () => {
+                                            const result = await deleteRuleAction(rule.id);
+                                            if (result?.error) toast.error(result.error);
+                                            else toast.success("Rule deleted");
+                                        }}>
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div >
     )
 }
 
-function TradeListModal({ isOpen, onClose, date, trades, setTradeToDelete }: { isOpen: boolean, onClose: () => void, date: Date | null, trades: Trade[], setTradeToDelete: (id: string | null) => void }) {
+function TradeListModal({ isOpen, onClose, date, trades, setTradeToDelete, rules }: { isOpen: boolean, onClose: () => void, date: Date | null, trades: Trade[], setTradeToDelete: (id: string | null) => void, rules: Rule[] }) {
     const [editingId, setEditingId] = useState<string | null>(null)
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
@@ -519,7 +580,7 @@ function TradeListModal({ isOpen, onClose, date, trades, setTradeToDelete }: { i
                         trades.map(trade => (
                             <div key={trade.id} className="border rounded-lg p-3 sm:p-4 bg-card">
                                 {editingId === trade.id ? (
-                                    <EditTradeForm trade={trade} onCancel={() => setEditingId(null)} onSuccess={() => setEditingId(null)} />
+                                    <EditTradeForm trade={trade} onCancel={() => setEditingId(null)} onSuccess={() => setEditingId(null)} rules={rules} />
                                 ) : (
                                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                                         <div>
@@ -576,7 +637,7 @@ function TradeListModal({ isOpen, onClose, date, trades, setTradeToDelete }: { i
     )
 }
 
-function EditTradeForm({ trade, onCancel, onSuccess }: { trade: Trade, onCancel: () => void, onSuccess: () => void }) {
+function EditTradeForm({ trade, onCancel, onSuccess, rules }: { trade: Trade, onCancel: () => void, onSuccess: () => void, rules: Rule[] }) {
     // Simplified form for editing
     const [formData, setFormData] = useState({
         entry: trade.entryPrice.toString(),
@@ -586,7 +647,7 @@ function EditTradeForm({ trade, onCancel, onSuccess }: { trade: Trade, onCancel:
         type: trade.type,
         pnl: trade.pnl.toString(),
         analysis: trade.analysis,
-        emotions: trade.emotions,
+        rules: trade.rules || [],
         symbol: trade.symbol,
         date: trade.date
     })
@@ -594,9 +655,20 @@ function EditTradeForm({ trade, onCancel, onSuccess }: { trade: Trade, onCancel:
     const [calculatedPnl, setCalculatedPnl] = useState<number | null>(null)
 
     const handleInput = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-        const { name, value } = e.target
+        const { name, value, type } = e.target
         setFormData(prev => {
-            const newData = { ...prev, [name]: value }
+            const newData = { ...prev }
+            if (type === 'checkbox' && name === 'rules') {
+                const target = e.target as HTMLInputElement;
+                if (target.checked) {
+                    newData.rules = [...prev.rules, value];
+                } else {
+                    newData.rules = prev.rules.filter(r => r !== value);
+                }
+            } else {
+                (newData as any)[name] = value;
+            }
+
             if (['entry', 'exit', 'quantity', 'fees', 'type'].includes(name)) {
                 const entry = parseFloat(newData.entry) || 0
                 const exit = parseFloat(newData.exit) || 0
@@ -677,15 +749,36 @@ function EditTradeForm({ trade, onCancel, onSuccess }: { trade: Trade, onCancel:
                 <Label htmlFor="analysis">Analysis</Label>
                 <Textarea name="analysis" value={formData.analysis} onChange={handleInput} rows={2} />
             </div>
-            <div className="space-y-1">
-                <Label htmlFor="emotions">Mistakes/Emotions</Label>
-                <select name="emotions" value={formData.emotions} onChange={handleInput} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                    {COMMON_MISTAKES.map(mistake => (
-                        <option key={mistake.value} value={mistake.value}>{mistake.label}</option>
-                    ))}
-                </select>
+
+            <div className="space-y-3 mt-4">
+                <Label>Discipline / Custom Rules Followed</Label>
+                {rules.length === 0 ? (
+                    <p className="text-xs text-muted-foreground border border-dashed p-3 rounded-md bg-muted/30">
+                        No custom rules to select.
+                    </p>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[150px] overflow-y-auto p-1 custom-scrollbar">
+                        {rules.map((rule) => (
+                            <div key={rule.id} className="flex items-start space-x-2 bg-background p-2 rounded-md border shadow-sm">
+                                <input
+                                    type="checkbox"
+                                    id={`edit-rule-${rule.id}`}
+                                    name="rules"
+                                    value={rule.text}
+                                    checked={formData.rules.includes(rule.text)}
+                                    onChange={handleInput}
+                                    className="mt-0.5 h-3.5 w-3.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+                                />
+                                <label htmlFor={`edit-rule-${rule.id}`} className="text-xs font-medium leading-none cursor-pointer flex-1">
+                                    {rule.text}
+                                </label>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
-            <div className="flex justify-end gap-2 pt-2">
+
+            <div className="flex justify-end gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
                 <Button type="submit">Update Trade</Button>
             </div>

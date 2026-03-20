@@ -13,8 +13,14 @@ export interface Trade {
     fees: number;
     pnl: number;
     analysis: string;
-    emotions: string;
+    rules: string[]; // Replaces emotions, stored as JSON array in original emotions column
     attachment?: string;
+}
+
+export interface Rule {
+    id: string;
+    userId: string;
+    text: string;
 }
 
 // Helper to map DB row to Trade object
@@ -32,7 +38,10 @@ function mapRowToTrade(row: any): Trade {
         fees: Number(row.fees),
         pnl: Number(row.pnl),
         analysis: row.analysis,
-        emotions: row.emotions,
+        rules: (() => {
+            try { return JSON.parse(row.emotions) || []; }
+            catch { return row.emotions ? [row.emotions] : []; }
+        })(),
         attachment: row.attachment || undefined,
     };
 }
@@ -61,7 +70,7 @@ export async function saveTrade(trade: Omit<Trade, 'id' | 'userId'>, userId: str
         ) VALUES (
             ${userId}, ${trade.date}, ${trade.time}, ${trade.symbol}, ${trade.type},
             ${trade.entryPrice}, ${trade.exitPrice}, ${trade.quantity}, ${trade.fees}, ${trade.pnl},
-            ${trade.analysis}, ${trade.emotions}, ${trade.attachment}
+            ${trade.analysis}, ${JSON.stringify(trade.rules)}, ${trade.attachment}
         )
         RETURNING *;
     `;
@@ -103,11 +112,49 @@ export async function updateTrade(id: string, updatedData: Partial<Trade>, userI
             fees = ${updatedData.fees},
             pnl = ${updatedData.pnl},
             analysis = ${updatedData.analysis},
-            emotions = ${updatedData.emotions},
+            emotions = ${JSON.stringify(updatedData.rules || [])},
             attachment = ${updatedData.attachment}
         WHERE id = ${id} AND user_id = ${userId}
         RETURNING *;
     `;
 
     return rows.length > 0 ? mapRowToTrade(rows[0]) : null;
+}
+
+export async function getRules(userId: string): Promise<Rule[]> {
+    try {
+        const { rows } = await sql`
+            SELECT id, user_id, text FROM user_rules 
+            WHERE user_id = ${userId}
+            ORDER BY created_at ASC;
+        `;
+        return rows.map(r => ({ id: r.id, userId: r.user_id, text: r.text }));
+    } catch {
+        // Fallback or create table
+        await sql`
+            CREATE TABLE IF NOT EXISTS user_rules (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id TEXT NOT NULL,
+                text TEXT NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            );
+        `;
+        return [];
+    }
+}
+
+export async function addRule(userId: string, text: string): Promise<Rule> {
+    const { rows } = await sql`
+        INSERT INTO user_rules (user_id, text)
+        VALUES (${userId}, ${text})
+        RETURNING id, user_id, text;
+    `;
+    return { id: rows[0].id, userId: rows[0].user_id, text: rows[0].text };
+}
+
+export async function deleteRule(id: string, userId: string): Promise<void> {
+    await sql`
+        DELETE FROM user_rules 
+        WHERE id = ${id} AND user_id = ${userId};
+    `;
 }

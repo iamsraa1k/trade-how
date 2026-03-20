@@ -17,9 +17,9 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { addNewTrade } from "@/app/actions"
 import { useRouter } from "next/navigation"
-import { COMMON_MISTAKES } from "@/lib/constants"
+import type { Rule } from "@/lib/db"
 
-export function TradeForm() {
+export function TradeForm({ rules }: { rules: Rule[] }) {
     const router = useRouter()
     const [isSubmitting, setIsSubmitting] = React.useState(false)
 
@@ -33,7 +33,7 @@ export function TradeForm() {
         pnl: "",
         symbol: "",
         analysis: "",
-        emotions: "",
+        rules: [] as string[],
         date: new Date().toISOString().split('T')[0]
     })
 
@@ -41,10 +41,21 @@ export function TradeForm() {
     const [calculatedPnl, setCalculatedPnl] = React.useState<number | null>(null)
 
     const handleInput = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-        const { name, value } = e.target
+        const { name, value, type } = e.target
 
         setFormData(prev => {
-            const newData = { ...prev, [name]: value }
+            const newData = { ...prev }
+
+            if (type === 'checkbox' && name === 'rules') {
+                const target = e.target as HTMLInputElement;
+                if (target.checked) {
+                    newData.rules = [...prev.rules, value];
+                } else {
+                    newData.rules = prev.rules.filter(r => r !== value);
+                }
+            } else {
+                (newData as any)[name] = value;
+            }
 
             // Auto Calculation
             if (['entry', 'exit', 'quantity', 'fees', 'type'].includes(name)) {
@@ -252,19 +263,32 @@ export function TradeForm() {
                                 />
                             </div>
 
-                            <div className="space-y-2">
-                                <Label htmlFor="emotions">Emotions / Mistakes</Label>
-                                <select
-                                    name="emotions"
-                                    id="emotions"
-                                    value={formData.emotions}
-                                    onChange={handleInput}
-                                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                    {COMMON_MISTAKES.map(mistake => (
-                                        <option key={mistake.value} value={mistake.value}>{mistake.label}</option>
-                                    ))}
-                                </select>
+                            <div className="space-y-3">
+                                <Label>Discipline / Custom Rules Followed</Label>
+                                {rules.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground border border-dashed p-4 rounded-md bg-muted/30">
+                                        No custom rules added yet. Add rules in the dashboard to track your discipline!
+                                    </p>
+                                ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[200px] overflow-y-auto p-1 custom-scrollbar">
+                                        {rules.map((rule) => (
+                                            <div key={rule.id} className="flex items-start space-x-3 bg-background p-3 rounded-md border shadow-sm">
+                                                <input
+                                                    type="checkbox"
+                                                    id={`rule-${rule.id}`}
+                                                    name="rules"
+                                                    value={rule.text}
+                                                    checked={formData.rules.includes(rule.text)}
+                                                    onChange={handleInput}
+                                                    className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600"
+                                                />
+                                                <label htmlFor={`rule-${rule.id}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1">
+                                                    {rule.text}
+                                                </label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="space-y-2">

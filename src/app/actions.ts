@@ -1,6 +1,6 @@
 'use server'
 
-import { getTrades, saveTrade, updateTrade, deleteTrade } from '@/lib/db';
+import { getTrades, saveTrade, updateTrade, deleteTrade, getRules, addRule, deleteRule } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -18,7 +18,7 @@ const TradeSchema = z.object({
     fees: z.coerce.number().optional().default(0),
     pnl: z.coerce.number(),
     analysis: z.string().optional().default(""),
-    emotions: z.string().optional().default(""),
+    rules: z.array(z.string()).optional().default([]),
     attachment: z.any().optional()
 });
 
@@ -38,12 +38,45 @@ export async function fetchTrades() {
     return await getTrades(userId);
 }
 
+export async function fetchRules() {
+    const userId = await getAuthenticatedUser();
+    return await getRules(userId);
+}
+
+export async function addRuleAction(text: string) {
+    try {
+        const userId = await getAuthenticatedUser();
+        await addRule(userId, text);
+        revalidatePath('/');
+        revalidatePath('/add');
+        return { success: true };
+    } catch (error: any) {
+        console.error("Failed to add rule", error);
+        return { success: false, error: "Failed to add rule" };
+    }
+}
+
+export async function deleteRuleAction(id: string) {
+    try {
+        const userId = await getAuthenticatedUser();
+        await deleteRule(id, userId);
+        revalidatePath('/');
+        revalidatePath('/add');
+        return { success: true };
+    } catch (error: any) {
+        console.error("Failed to delete rule", error);
+        return { success: false, error: "Failed to delete rule" };
+    }
+}
+
 export async function addNewTrade(formData: FormData) {
     try {
         const userId = await getAuthenticatedUser();
 
         // Convert formData entries to a plain object
-        const formObject = Object.fromEntries(formData.entries());
+        const formObject: Record<string, any> = Object.fromEntries(formData.entries());
+        // Handle multi-select checkboxes for rules
+        formObject.rules = formData.getAll('rules');
 
         // Parse and validate using Zod
         const parsed = TradeSchema.safeParse(formObject);
@@ -74,7 +107,7 @@ export async function addNewTrade(formData: FormData) {
             fees: data.fees,
             pnl: data.pnl,
             analysis: analysis,
-            emotions: data.emotions,
+            rules: data.rules,
             attachment: (data.attachment as File)?.name || "",
         };
 
@@ -92,7 +125,8 @@ export async function updateTradeAction(id: string, formData: FormData) {
     try {
         const userId = await getAuthenticatedUser();
 
-        const formObject = Object.fromEntries(formData.entries());
+        const formObject: Record<string, any> = Object.fromEntries(formData.entries());
+        formObject.rules = formData.getAll('rules');
         const parsed = TradeSchema.safeParse(formObject);
 
         if (!parsed.success) {
@@ -112,7 +146,7 @@ export async function updateTradeAction(id: string, formData: FormData) {
             fees: data.fees,
             pnl: data.pnl,
             analysis: data.analysis,
-            emotions: data.emotions,
+            rules: data.rules,
             attachment: (data.attachment as File)?.name || "",
         };
 

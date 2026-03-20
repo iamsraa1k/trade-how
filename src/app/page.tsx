@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import Link from "next/link";
 
-import { getTrades } from "@/lib/db";
+import { getTrades, getRules } from "@/lib/db";
 
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -19,6 +19,7 @@ export default async function Home() {
   }
 
   const trades = await getTrades(session.user.email);
+  const rules = await getRules(session.user.email);
 
   return (
     <div className="min-h-screen p-4 sm:p-6 font-[family-name:var(--font-geist-sans)] bg-zinc-50 dark:bg-zinc-950 flex flex-col">
@@ -34,7 +35,7 @@ export default async function Home() {
         </div>
       </header>
       <main className="flex-1 w-full px-4 sm:px-8">
-        <Dashboard trades={trades} />
+        <Dashboard trades={trades} rules={rules} />
       </main>
     </div>
   );
