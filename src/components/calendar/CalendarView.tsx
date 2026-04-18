@@ -31,6 +31,7 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
     const [currentMonth, setCurrentMonth] = useState(new Date())
     const [selectedDate, setSelectedDate] = useState<Date | null>(null)
     const [isDayModalOpen, setIsDayModalOpen] = useState(false)
+    const [mobileActiveTradeId, setMobileActiveTradeId] = useState<string | null>(null)
 
     const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1))
     const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1))
@@ -53,6 +54,7 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
         const hasTrades = trades.some(t => t.date === dateStr)
         if (hasTrades) {
             setSelectedDate(date)
+            setMobileActiveTradeId(null)
             setIsDayModalOpen(true)
         }
     }
@@ -183,8 +185,8 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
 
                     <div className="space-y-4 mt-4">
                         {selectedTrades.map((trade, idx) => (
-                            <div key={trade.id} className="group p-4 border rounded-xl bg-card hover:bg-muted/30 hover:border-primary/30 transition-all shadow-sm">
-                                <div className="flex justify-between items-start mb-2">
+                            <div key={trade.id} onClick={(e) => { e.stopPropagation(); setMobileActiveTradeId(mobileActiveTradeId === trade.id ? null : trade.id) }} className="group p-4 border rounded-xl bg-card hover:bg-muted/30 hover:border-primary/30 transition-all shadow-sm cursor-pointer sm:cursor-default">
+                                <div className="flex justify-between items-start mb-2 pointer-events-none sm:pointer-events-auto">
                                     <div>
                                         <span className="font-bold text-lg flex items-center gap-2">
                                             {trade.symbol} 
@@ -196,24 +198,24 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                                         </div>
                                     </div>
                                     
-                                    <div className="flex flex-col items-end gap-1.5 h-[50px]">
+                                    <div className="flex flex-col items-end gap-1.5 h-[50px] pointer-events-auto">
                                         <span className={`font-bold text-xl tracking-tight drop-shadow-sm ${trade.pnl > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                                             {trade.pnl > 0 ? '+' : ''}{trade.pnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                                         </span>
-                                        <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <Link href={`/edit/${trade.id}`}>
-                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50">
+                                        <div className={`flex space-x-1 transition-opacity ${mobileActiveTradeId === trade.id ? 'opacity-100' : 'opacity-0 sm:group-hover:opacity-100'}`}>
+                                            <Link href={`/edit/${trade.id}`} onClick={(e) => e.stopPropagation()}>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 pointer-events-auto">
                                                     <Edit className="h-3 w-3" />
                                                 </Button>
                                             </Link>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/50" onClick={(e) => handleDelete(e, trade.id)}>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/50 pointer-events-auto" onClick={(e) => handleDelete(e, trade.id)}>
                                                 <Trash2 className="h-3 w-3" />
                                             </Button>
                                         </div>
                                     </div>
                                 </div>
                                 {trade.analysis && (
-                                     <p className="text-sm mt-3 text-muted-foreground line-clamp-2 bg-muted/20 p-2 rounded-md border-l-2 border-l-primary/50">
+                                     <p className="text-sm mt-3 text-muted-foreground line-clamp-2 bg-muted/20 p-2 rounded-md border-l-2 border-l-primary/50 text-left pointer-events-none sm:pointer-events-auto">
                                         &quot;{trade.analysis}&quot;
                                      </p>
                                 )}
