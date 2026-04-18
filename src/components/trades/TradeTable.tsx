@@ -114,10 +114,10 @@ export function TradeTable({ trades, rules }: { trades: Trade[], rules: Rule[] }
                     doc.text(legString, 16, currentY + 25);
                     doc.setFontSize(10); // reset
                 } else {
-                    doc.text(`Entry: ₹${trade.entryPrice}      Exit: ₹${trade.exitPrice}      Qty: ${trade.quantity}`, 16, currentY + 20);
+                    doc.text(`Entry: Rs. ${trade.entryPrice}      Exit: Rs. ${trade.exitPrice}      Qty: ${trade.quantity}`, 16, currentY + 20);
                 }
 
-                const pnlStr = trade.pnl > 0 ? `+₹${trade.pnl.toFixed(2)}` : `-₹${Math.abs(trade.pnl).toFixed(2)}`;
+                const pnlStr = trade.pnl > 0 ? `+Rs. ${trade.pnl.toFixed(2)}` : `-Rs. ${Math.abs(trade.pnl).toFixed(2)}`;
                 if (trade.pnl > 0) doc.setTextColor(16, 185, 129); // Green
                 else doc.setTextColor(239, 68, 68); // Red
                 doc.setFontSize(12);
@@ -125,7 +125,7 @@ export function TradeTable({ trades, rules }: { trades: Trade[], rules: Rule[] }
                 
                 doc.setTextColor(0);
                 doc.setFontSize(10);
-                doc.text(`Fees: ₹${trade.fees.toFixed(2)}`, 80, currentY + 33);
+                doc.text(`Fees: Rs. ${trade.fees.toFixed(2)}`, 80, currentY + 33);
 
                 // Analysis
                 doc.setFontSize(10);

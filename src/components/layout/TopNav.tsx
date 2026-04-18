@@ -3,7 +3,7 @@
 import { useSession, signOut } from "next-auth/react";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import { Button } from "@/components/ui/button";
-import { LogOut, Menu, UserCircle } from "lucide-react";
+import { LogOut, Menu } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,6 +15,16 @@ import {
 
 export function TopNav({ toggleSidebar }: { toggleSidebar: () => void }) {
   const { data: session } = useSession();
+  
+  // Calculate initials logic
+  const getInitials = (name?: string | null) => {
+    if (!name) return "?";
+    const parts = name.trim().split(" ");
+    if (parts.length > 1) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return parts[0][0].toUpperCase();
+  };
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 sm:px-6">
@@ -31,12 +41,8 @@ export function TopNav({ toggleSidebar }: { toggleSidebar: () => void }) {
         {session?.user && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-9 w-9 rounded-full overflow-hidden border">
-                {session.user.image ? (
-                  <img src={session.user.image} alt={session.user.name || "User"} className="h-full w-full object-cover" />
-                ) : (
-                  <UserCircle className="h-6 w-6" />
-                )}
+              <Button variant="ghost" className="relative h-9 w-9 rounded-full bg-primary/10 hover:bg-primary/20 text-primary font-bold overflow-hidden border border-primary/20 transition-colors">
+                {getInitials(session.user.name)}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
