@@ -8,6 +8,7 @@ import { motion } from "framer-motion"
 import { startOfMonth, endOfMonth, format } from "date-fns"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { CalendarView } from "@/components/calendar/CalendarView"
 
 export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] }) {
     const currentMonth = new Date()
@@ -76,8 +77,8 @@ export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] })
     }, [filteredTrades]);
 
     return (
-        <div className="space-y-6 flex flex-col">
-            <div className="flex flex-col lg:flex-row gap-4 mb-2">
+        <div className="space-y-8 flex flex-col">
+            <div className="flex flex-col lg:flex-row gap-4">
                 <div className="flex-1 flex flex-col sm:flex-row justify-between items-center bg-card p-6 rounded-xl shadow-sm border gap-4">
                     <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 w-full sm:w-auto text-center sm:text-left">
                         <span className="text-sm font-medium text-muted-foreground sm:mr-2">This Month&#39;s Realized P/L:</span>
@@ -88,7 +89,11 @@ export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] })
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="pt-2 w-full max-w-5xl mx-auto">
+                <CalendarView trades={trades} rules={rules} />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4">
                 {/* Win Rate Chart */}
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
                     <Card className="h-full shadow-md border hover:shadow-lg transition-shadow">

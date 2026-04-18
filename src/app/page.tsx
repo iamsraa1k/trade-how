@@ -18,22 +18,11 @@ export default async function Home() {
   return (
     <div className="w-full h-full max-w-[1400px] mx-auto space-y-12 pb-12">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Performance Calendar</h1>
-        <p className="text-muted-foreground mt-1">Daily overview of your trading P/L.</p>
+        <h1 className="text-3xl font-bold tracking-tight">Dashboard Overview</h1>
+        <p className="text-muted-foreground mt-1">Summary of your trading metrics.</p>
       </div>
       
-      {/* Constrain calendar width to be punchy while letting dashboard be wide */}
-      <div className="max-w-5xl mx-auto">
-         <CalendarView trades={trades} rules={rules} />
-      </div>
-
-      <div className="pt-8 border-t border-border/50">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold tracking-tight">Dashboard Overview</h2>
-            <p className="text-muted-foreground mt-1">Summary of your trading metrics.</p>
-          </div>
-          <Dashboard trades={trades} rules={rules} />
-      </div>
+      <Dashboard trades={trades} rules={rules} />
     </div>
   );
 }
