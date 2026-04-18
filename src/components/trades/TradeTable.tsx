@@ -24,28 +24,18 @@ export function TradeTable({ trades, rules }: { trades: Trade[], rules: Rule[] }
             return;
         }
 
-        let csvContent = "Date,Symbol,Type,IsBasket,LegDetails,Entry,Exit,Quantity,Fees,PnL,Analysis\n";
+        let csvContent = "Date,MainSymbol,Type,LegNo,LegSymbol,LegType,Entry,Exit,Quantity,Fees,TotalPnL,Analysis\n";
         
         trades.forEach(t => {
-            let legDetails = "Single Leg";
+            const safeAnalysis = `"${(t.analysis || "").replace(/"/g, '""')}"`;
             if (t.isBasket && t.legs) {
-                legDetails = t.legs.map((l, i) => `L${i+1}[${l.type} Q:${l.quantity} In:${l.entryPrice} Out:${l.exitPrice} F:${l.fees}]`).join(" | ");
+                csvContent += `${t.date},"${t.symbol}",BASKET,-,-,-,-,-,-,${t.fees},${t.pnl},${safeAnalysis}\n`;
+                t.legs.forEach((l, i) => {
+                    csvContent += `${t.date},"${t.symbol}",BASKET,${i+1},"${l.symbol || '-'}",${l.type.toUpperCase()},${l.entryPrice},${l.exitPrice},${l.quantity},${l.fees},-,-\n`;
+                });
+            } else {
+                csvContent += `${t.date},"${t.symbol}",${t.type.toUpperCase()},-,-,-,${t.entryPrice},${t.exitPrice},${t.quantity},${t.fees},${t.pnl},${safeAnalysis}\n`;
             }
-            
-            const row = [
-                t.date,
-                `"${t.symbol}"`,
-                t.isBasket ? "BASKET" : t.type.toUpperCase(),
-                t.isBasket ? "Yes" : "No",
-                `"${legDetails}"`,
-                t.isBasket ? "---" : t.entryPrice,
-                t.isBasket ? "---" : t.exitPrice,
-                t.isBasket ? "---" : t.quantity,
-                t.fees,
-                t.pnl,
-                `"${(t.analysis || "").replace(/"/g, '""')}"`
-            ];
-            csvContent += row.join(",") + "\n";
         });
 
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -82,69 +72,62 @@ export function TradeTable({ trades, rules }: { trades: Trade[], rules: Rule[] }
             // Detailed Trade Log Pages
             let currentY = 50;
 
-            trades.forEach((trade, index) => {
-                if (currentY > 250) {
+            trades.forEach((trade) => {
+                if (currentY > 270) {
                     doc.addPage();
                     currentY = 20;
                 }
 
-                // Add a border/card look
-                doc.setDrawColor(220, 220, 220);
-                doc.setFillColor(250, 250, 250);
-                doc.roundedRect(12, currentY, 186, 65, 3, 3, "FD");
-
-                // Header
-                doc.setFontSize(14);
-                doc.setTextColor(0);
-                doc.text(`${trade.symbol.toUpperCase()} - ${trade.isBasket ? "BASKET" : trade.type.toUpperCase()}`, 16, currentY + 10);
+                const isProfit = trade.pnl >= 0;
                 
-                doc.setFontSize(10);
-                doc.setTextColor(100);
-                doc.text(format(new Date(trade.date), "PP"), 160, currentY + 10);
-
-                // Financials
+                doc.setFont("helvetica", "bold");
                 doc.setTextColor(0);
-                if (trade.isBasket && trade.legs) {
-                    doc.text(`BASKET ORDER: ${trade.legs.length} Executed Legs.`, 16, currentY + 20);
-                    doc.setFontSize(7);
-                    const legString = doc.splitTextToSize(
-                        trade.legs.map((l, i) => `L${i+1} ${l.symbol || ''}: ${l.type.toUpperCase()} [Q:${l.quantity} In:${l.entryPrice} Out:${l.exitPrice} F:${l.fees}]`).join(" | "), 
-                        175
-                    );
-                    doc.text(legString, 16, currentY + 25);
-                    doc.setFontSize(10); // reset
+                doc.setFontSize(10);
+                
+                doc.text(`${format(new Date(trade.date), "dd MMM yyyy")}  |  ${trade.symbol.toUpperCase()}  |  ${trade.isBasket ? "BASKET" : trade.type.toUpperCase()}`, 14, currentY);
+                
+                doc.setTextColor(isProfit ? 16 : 239, isProfit ? 185 : 68, isProfit ? 129 : 68);
+                doc.text(`PnL: ${trade.pnl > 0 ? "+" : ""}${trade.pnl.toFixed(2)}`, 160, currentY);
+                
+                currentY += 5;
+                
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(80);
+                doc.setFontSize(9);
+                
+                if (!trade.isBasket) {
+                    doc.text(`Qty: ${trade.quantity} | En: ${trade.entryPrice} | Ex: ${trade.exitPrice} | Fee: ${trade.fees}`, 14, currentY);
+                    currentY += 5;
                 } else {
-                    doc.text(`Entry: Rs. ${trade.entryPrice}      Exit: Rs. ${trade.exitPrice}      Qty: ${trade.quantity}`, 16, currentY + 20);
+                    doc.text(`Total Fees: ${trade.fees}`, 14, currentY);
+                    currentY += 5;
+                    // Legs
+                    if (trade.legs) {
+                        trade.legs.forEach((leg: any, i: number) => {
+                            if (currentY > 280) { doc.addPage(); currentY = 20; }
+                            doc.text(`  > Leg ${i+1} [${leg.symbol || 'N/A'}]: ${leg.type.toUpperCase()} | Qty: ${leg.quantity} | En: ${leg.entryPrice} | Ex: ${leg.exitPrice} | Fee: ${leg.fees}`, 14, currentY);
+                            currentY += 5;
+                        });
+                    }
                 }
 
-                const pnlStr = trade.pnl > 0 ? `+Rs. ${trade.pnl.toFixed(2)}` : `-Rs. ${Math.abs(trade.pnl).toFixed(2)}`;
-                if (trade.pnl > 0) doc.setTextColor(16, 185, 129); // Green
-                else doc.setTextColor(239, 68, 68); // Red
-                doc.setFontSize(12);
-                doc.text(`P/L: ${pnlStr}`, 16, currentY + 33);
+                if (trade.analysis) {
+                    const lines = doc.splitTextToSize(`Note: ${trade.analysis}`, 180);
+                    if (currentY + (lines.length * 4) > 280) { doc.addPage(); currentY = 20; }
+                    doc.text(lines, 14, currentY);
+                    currentY += (lines.length * 4);
+                }
                 
-                doc.setTextColor(0);
-                doc.setFontSize(10);
-                doc.text(`Fees: Rs. ${trade.fees.toFixed(2)}`, 80, currentY + 33);
-
-                // Analysis
-                doc.setFontSize(10);
-                doc.setTextColor(80);
-                const analysisText = doc.splitTextToSize(`Analysis: ${trade.analysis || "No analysis provided."}`, 175);
-                doc.text(analysisText, 16, currentY + 43);
-
-                // Rules checklist (Followed vs Not Followed)
-                const followed = trade.rules || [];
-                const notFollowed = rules.map(r => r.text).filter(r => !followed.includes(r));
-
-                doc.setFontSize(9);
-                doc.setTextColor(16, 185, 129); // Green
-                doc.text(`Rules Followed: ${followed.length > 0 ? followed.join(", ") : "None"}`, 16, currentY + 52);
+                const followed = trade.rules?.join(", ") || "None";
+                const missed = rules.filter(r => !(trade.rules || []).includes(r.text)).map(r => r.text).join(", ") || "None";
                 
-                doc.setTextColor(239, 68, 68); // Red
-                doc.text(`Rules Missed: ${notFollowed.length > 0 ? notFollowed.join(", ") : "None"}`, 16, currentY + 58);
-
-                currentY += 75;
+                doc.text(`Rules Followed: ${followed}`, 14, currentY);
+                currentY += 5;
+                doc.text(`Missed: ${missed}`, 14, currentY);
+                currentY += 7; 
+                
+                doc.setDrawColor(230);
+                doc.line(14, currentY - 3, 196, currentY - 3);
             });
 
             doc.save(`trade_journal_detailed_${format(new Date(), "yyyy-MM-dd")}.pdf`);

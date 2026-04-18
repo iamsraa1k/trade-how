@@ -179,8 +179,8 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                     {/* Explicit Total PnL for the Day */}
                     <div className="py-4 border-b">
                         <div className="flex justify-between items-center px-4 py-3 bg-muted/30 rounded-lg border shadow-inner">
-                            <span className="font-semibold text-lg">Total Daily Returns</span>
-                            <span className={`font-bold text-2xl ${selectedDayTotalPnl > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            <span className="font-semibold text-sm sm:text-lg">Total Daily Returns</span>
+                            <span className={`font-bold text-lg sm:text-2xl ${selectedDayTotalPnl > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                                 {selectedDayTotalPnl > 0 ? '+' : ''}{selectedDayTotalPnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                             </span>
                         </div>
@@ -191,7 +191,7 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                             <div key={trade.id} onClick={(e) => { e.stopPropagation(); setMobileActiveTradeId(mobileActiveTradeId === trade.id ? null : trade.id) }} className="group p-4 border rounded-xl bg-card hover:bg-muted/30 hover:border-primary/30 transition-all shadow-sm cursor-pointer sm:cursor-default">
                                 <div className="flex justify-between items-start mb-2 pointer-events-none sm:pointer-events-auto">
                                     <div>
-                                        <span className="font-bold text-lg flex items-center gap-2">
+                                        <span className="font-bold text-sm sm:text-lg flex items-center gap-2">
                                             {trade.symbol} 
                                             {trade.isBasket && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full dark:bg-purple-900/30 dark:text-purple-400">BASKET ORDER • {trade.legs?.length || 0} LEGS</span>}
                                         </span>
@@ -206,7 +206,7 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                                     </div>
                                     
                                     <div className="flex flex-col items-end gap-1.5 h-[50px] pointer-events-auto">
-                                        <span className={`font-bold text-xl tracking-tight drop-shadow-sm ${trade.pnl > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                        <span className={`font-bold text-sm sm:text-xl tracking-tight drop-shadow-sm ${trade.pnl > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                                             {trade.pnl > 0 ? '+' : ''}{trade.pnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                                         </span>
                                         {deleteConfirmId === trade.id ? (
