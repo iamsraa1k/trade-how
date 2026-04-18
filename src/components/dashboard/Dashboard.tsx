@@ -76,7 +76,7 @@ export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] })
     }, [filteredTrades]);
 
     return (
-        <div className="space-y-6 h-full flex flex-col">
+        <div className="space-y-6 flex flex-col">
             <div className="flex flex-col lg:flex-row gap-4 mb-2">
                 <div className="flex-1 flex flex-col sm:flex-row justify-between items-center bg-card p-6 rounded-xl shadow-sm border gap-4">
                     <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 w-full sm:w-auto text-center sm:text-left">
