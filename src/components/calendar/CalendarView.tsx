@@ -151,7 +151,7 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                                             {/* Desktop view - Full formatted currency */}
                                             <div className="hidden sm:flex flex-col items-center w-full">
                                                 <span className={`text-xs md:text-sm lg:text-base font-extrabold tracking-tight truncate w-full text-center drop-shadow-sm ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                                                    {isPositive ? '+' : ''}{pnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })}
+                                                    {formatCompactNumber(pnl)}
                                                 </span>
                                                 <div className="text-[10px] mt-1 font-medium text-muted-foreground opacity-80">{tradesForThatDay.length} Trade{tradesForThatDay.length > 1 ? 's' : ''}</div>
                                             </div>
@@ -176,14 +176,14 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                         <div className="flex justify-between items-center px-4 py-3 bg-muted/30 rounded-lg border shadow-inner">
                             <span className="font-semibold text-lg">Total Daily Returns</span>
                             <span className={`font-bold text-2xl ${selectedDayTotalPnl > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                {selectedDayTotalPnl > 0 ? '+' : ''}{selectedDayTotalPnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
+                                {formatCompactNumber(selectedDayTotalPnl)}
                             </span>
                         </div>
                     </div>
 
                     <div className="space-y-4 mt-4">
                         {selectedTrades.map((trade, idx) => (
-                            <div key={trade.id} className="group relative p-4 border rounded-xl bg-card hover:bg-muted/30 hover:border-primary/30 transition-all shadow-sm">
+                            <div key={trade.id} className="group p-4 border rounded-xl bg-card hover:bg-muted/30 hover:border-primary/30 transition-all shadow-sm">
                                 <div className="flex justify-between items-start mb-2">
                                     <div>
                                         <span className="font-bold text-lg flex items-center gap-2">
@@ -195,26 +195,28 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                                             {!trade.isBasket && <span>Qty: <span className="font-semibold text-foreground">{trade.quantity}</span></span>}
                                         </div>
                                     </div>
-                                    <span className={`font-bold text-lg flex flex-col items-end ${trade.pnl > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                        {trade.pnl > 0 ? '+' : ''}{trade.pnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
-                                    </span>
+                                    
+                                    <div className="flex flex-col items-end gap-1.5 h-[50px]">
+                                        <span className={`font-bold text-xl tracking-tight drop-shadow-sm ${trade.pnl > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                            {formatCompactNumber(trade.pnl)}
+                                        </span>
+                                        <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <Link href={`/edit/${trade.id}`}>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50">
+                                                    <Edit className="h-3 w-3" />
+                                                </Button>
+                                            </Link>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/50" onClick={(e) => handleDelete(e, trade.id)}>
+                                                <Trash2 className="h-3 w-3" />
+                                            </Button>
+                                        </div>
+                                    </div>
                                 </div>
                                 {trade.analysis && (
-                                     <p className="text-sm mt-3 text-muted-foreground line-clamp-2 bg-muted/20 p-2 rounded-md">
+                                     <p className="text-sm mt-3 text-muted-foreground line-clamp-2 bg-muted/20 p-2 rounded-md border-l-2 border-l-primary/50">
                                         &quot;{trade.analysis}&quot;
                                      </p>
                                 )}
-                                
-                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 bg-background shadow-md border p-1 rounded-md">
-                                    <Link href={`/edit/${trade.id}`}>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50">
-                                            <Edit className="h-4 w-4" />
-                                        </Button>
-                                    </Link>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/50" onClick={(e) => handleDelete(e, trade.id)}>
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </div>
                             </div>
                         ))}
                     </div>
