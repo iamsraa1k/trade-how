@@ -1,13 +1,10 @@
-
-import { Dashboard } from "@/components/dashboard/Dashboard";
-
+import { CalendarView } from "@/components/calendar/CalendarView";
 import { getTrades, getRules } from "@/lib/db";
-
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
-export default async function Home() {
+export default async function CalendarPage() {
   const session = await getServerSession(authOptions);
 
   if (!session || !session.user?.email) {
@@ -20,10 +17,10 @@ export default async function Home() {
   return (
     <div className="w-full h-full max-w-7xl mx-auto space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard Overview</h1>
-        <p className="text-muted-foreground mt-1">Summary of your trading performance.</p>
+        <h1 className="text-3xl font-bold tracking-tight">Performance Calendar</h1>
+        <p className="text-muted-foreground mt-1">Daily overview of your trading P/L.</p>
       </div>
-      <Dashboard trades={trades} rules={rules} />
+      <CalendarView trades={trades} rules={rules} />
     </div>
   );
 }

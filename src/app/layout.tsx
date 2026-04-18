@@ -3,6 +3,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
 import { Providers } from "@/components/Providers";
 import { Toaster } from "@/components/ui/sonner";
+import { MainLayout } from "@/components/layout/MainLayout";
 
 export const metadata = {
   title: "TradeHow",
@@ -28,7 +29,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <Providers>
-            {children}
+            <MainLayout>
+              {children}
+            </MainLayout>
             <Toaster />
           </Providers>
         </ThemeProvider>

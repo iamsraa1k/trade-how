@@ -46,10 +46,10 @@ export async function fetchRules() {
 export async function addRuleAction(text: string) {
     try {
         const userId = await getAuthenticatedUser();
-        await addRule(userId, text);
+        const rule = await addRule(userId, text);
         revalidatePath('/');
         revalidatePath('/add');
-        return { success: true };
+        return { success: true, rule };
     } catch (error: any) {
         console.error("Failed to add rule", error);
         return { success: false, error: "Failed to add rule" };
