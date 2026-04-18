@@ -141,9 +141,9 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                                     {pnl !== null && (
                                         <div className="flex flex-col items-center justify-center flex-1 w-full mt-1 sm:mt-2">
                                             {/* Mobile view - Simple pill dot with minimal space to prevent collision */}
-                                            <div className="sm:hidden flex flex-col items-center gap-1 w-full">
-                                                <div className={`w-full max-w-[24px] h-1 rounded-full ${isPositive ? "bg-emerald-500" : "bg-red-500"}`}></div>
-                                                <span className={`text-[9px] font-extrabold tracking-tighter truncate w-full text-center px-0.5 ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                                            <div className="sm:hidden flex flex-col items-center gap-0.5 w-full">
+                                                <div className={`w-full max-w-[20px] h-1 rounded-full ${isPositive ? "bg-emerald-500" : "bg-red-500"}`}></div>
+                                                <span className={`text-[8px] font-extrabold tracking-tight leading-none w-full text-center ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                                                   {formatCompactNumber(pnl)}
                                                 </span>
                                             </div>
@@ -151,7 +151,7 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                                             {/* Desktop view - Full formatted currency */}
                                             <div className="hidden sm:flex flex-col items-center w-full">
                                                 <span className={`text-xs md:text-sm lg:text-base font-extrabold tracking-tight truncate w-full text-center drop-shadow-sm ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                                                    {formatCompactNumber(pnl)}
+                                                    {isPositive ? '+' : ''}{pnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })}
                                                 </span>
                                                 <div className="text-[10px] mt-1 font-medium text-muted-foreground opacity-80">{tradesForThatDay.length} Trade{tradesForThatDay.length > 1 ? 's' : ''}</div>
                                             </div>
@@ -176,7 +176,7 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                         <div className="flex justify-between items-center px-4 py-3 bg-muted/30 rounded-lg border shadow-inner">
                             <span className="font-semibold text-lg">Total Daily Returns</span>
                             <span className={`font-bold text-2xl ${selectedDayTotalPnl > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                {formatCompactNumber(selectedDayTotalPnl)}
+                                {selectedDayTotalPnl > 0 ? '+' : ''}{selectedDayTotalPnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                             </span>
                         </div>
                     </div>
@@ -198,7 +198,7 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                                     
                                     <div className="flex flex-col items-end gap-1.5 h-[50px]">
                                         <span className={`font-bold text-xl tracking-tight drop-shadow-sm ${trade.pnl > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                            {formatCompactNumber(trade.pnl)}
+                                            {trade.pnl > 0 ? '+' : ''}{trade.pnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                                         </span>
                                         <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <Link href={`/edit/${trade.id}`}>
