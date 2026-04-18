@@ -32,6 +32,7 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
     const [selectedDate, setSelectedDate] = useState<Date | null>(null)
     const [isDayModalOpen, setIsDayModalOpen] = useState(false)
     const [mobileActiveTradeId, setMobileActiveTradeId] = useState<string | null>(null)
+    const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
     const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1))
     const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1))
@@ -55,6 +56,7 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
         if (hasTrades) {
             setSelectedDate(date)
             setMobileActiveTradeId(null)
+            setDeleteConfirmId(null)
             setIsDayModalOpen(true)
         }
     }
@@ -67,15 +69,14 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
         selectedDayTotalPnl = selectedTrades.reduce((acc, t) => acc + t.pnl, 0);
     }
 
-    const handleDelete = async (e: React.MouseEvent, id: string) => {
+    const handleConfirmDelete = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-        if (confirm("Are you sure you want to delete this trade?")) {
-            await deleteTradeAction(id);
-            toast.success("Trade deleted successfully");
-            // If it was the last trade for the day, close modal
-            if (selectedTrades.length <= 1) {
-                setIsDayModalOpen(false);
-            }
+        setDeleteConfirmId(null);
+        await deleteTradeAction(id);
+        toast.success("Trade securely deleted");
+        // If it was the last trade for the day, close modal
+        if (selectedTrades.length <= 1) {
+            setIsDayModalOpen(false);
         }
     }
 
@@ -202,16 +203,24 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                                         <span className={`font-bold text-xl tracking-tight drop-shadow-sm ${trade.pnl > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                                             {trade.pnl > 0 ? '+' : ''}{trade.pnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                                         </span>
-                                        <div className={`flex space-x-1 transition-opacity ${mobileActiveTradeId === trade.id ? 'opacity-100' : 'opacity-0 sm:group-hover:opacity-100'}`}>
-                                            <Link href={`/edit/${trade.id}`} onClick={(e) => e.stopPropagation()}>
-                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 pointer-events-auto">
-                                                    <Edit className="h-3 w-3" />
+                                        {deleteConfirmId === trade.id ? (
+                                            <div className="flex gap-1 pointer-events-auto items-center mt-1">
+                                                <span className="text-[10px] text-red-500 font-bold mr-1 uppercase">Delete?</span>
+                                                <Button variant="destructive" size="sm" className="h-6 text-[10px] px-2 shadow-sm" onClick={(e) => handleConfirmDelete(e, trade.id)}>Yes</Button>
+                                                <Button variant="secondary" size="sm" className="h-6 text-[10px] px-2 shadow-sm" onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(null) }}>No</Button>
+                                            </div>
+                                        ) : (
+                                            <div className={`flex space-x-1 transition-opacity ${mobileActiveTradeId === trade.id ? 'opacity-100' : 'opacity-0 sm:group-hover:opacity-100'}`}>
+                                                <Link href={`/edit/${trade.id}`} onClick={(e) => e.stopPropagation()}>
+                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 pointer-events-auto">
+                                                        <Edit className="h-3 w-3" />
+                                                    </Button>
+                                                </Link>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/50 pointer-events-auto" onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(trade.id) }}>
+                                                    <Trash2 className="h-3 w-3" />
                                                 </Button>
-                                            </Link>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/50 pointer-events-auto" onClick={(e) => handleDelete(e, trade.id)}>
-                                                <Trash2 className="h-3 w-3" />
-                                            </Button>
-                                        </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 {trade.analysis && (

@@ -181,7 +181,7 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                 toast.error(result.error)
             } else {
                 toast.success(id ? "Trade updated successfully!" : "Trade saved successfully")
-                router.push("/trades")
+                router.push("/")
                 router.refresh()
             }
         } catch (error) {
