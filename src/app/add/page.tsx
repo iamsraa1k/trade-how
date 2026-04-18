@@ -18,21 +18,12 @@ export default async function AddTradePage() {
     const rules = await getRules(session.user.email);
 
     return (
-        <div className="min-h-screen p-4 sm:p-8 font-[family-name:var(--font-geist-sans)] bg-zinc-50 dark:bg-zinc-950">
-            <header className="flex justify-between items-center mb-8 max-w-3xl mx-auto w-full">
-                <div className="flex items-center gap-4">
-                    <Link href="/">
-                        <Button variant="ghost" size="icon">
-                            <ArrowLeft className="h-5 w-5" />
-                        </Button>
-                    </Link>
-                    <h1 className="text-2xl font-bold tracking-tight">Add New Trade</h1>
-                </div>
-                <ModeToggle />
-            </header>
-            <main className="max-w-3xl mx-auto w-full">
-                <TradeForm rules={rules} />
-            </main>
+        <div className="w-full max-w-3xl mx-auto space-y-6">
+            <div>
+                <h1 className="text-3xl font-bold tracking-tight">Add New Trade</h1>
+                <p className="text-muted-foreground mt-1">Record your executions and build your database.</p>
+            </div>
+            <TradeForm rules={rules} />
         </div>
     );
 }

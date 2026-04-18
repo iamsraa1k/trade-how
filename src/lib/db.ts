@@ -15,6 +15,8 @@ export interface Trade {
     analysis: string;
     rules: string[]; 
     attachment?: string;
+    isBasket?: boolean;
+    legs?: { type: "buy" | "sell", entryPrice: number, exitPrice: number, quantity: number, fees: number, symbol?: string }[];
 }
 
 export interface Rule {

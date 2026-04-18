@@ -15,7 +15,7 @@ export default async function CalendarPage() {
   const rules = await getRules(session.user.email);
 
   return (
-    <div className="w-full h-full max-w-7xl mx-auto space-y-6">
+    <div className="w-full h-full max-w-5xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Performance Calendar</h1>
         <p className="text-muted-foreground mt-1">Daily overview of your trading P/L.</p>

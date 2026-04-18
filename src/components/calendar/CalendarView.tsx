@@ -71,13 +71,13 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                     </div>
                 </CardHeader>
                 <CardContent className="flex-1 p-2 sm:p-6 overflow-hidden">
-                    <div className="grid grid-cols-7 gap-1 h-full content-start min-h-[500px]">
+                    <div className="grid grid-cols-7 gap-1 sm:gap-2 h-full content-start">
                         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
                             <div key={d} className="text-center text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">{d}</div>
                         ))}
 
                         {Array.from({ length: startDay }).map((_, i) => (
-                            <div key={`empty-${i}`} className="min-h-[80px]" />
+                            <div key={`empty-${i}`} className="min-h-[60px] sm:min-h-[90px]" />
                         ))}
 
                         {daysInMonth.map((day, i) => {
@@ -97,7 +97,7 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                                     transition={{ duration: 0.2 }}
                                     onClick={() => handleDayClick(day)}
                                     className={`
-                                aspect-square sm:aspect-auto sm:min-h-[80px] flex flex-col p-0.5 sm:p-1.5 border rounded-md sm:rounded-lg relative transition-all cursor-pointer group hover:shadow-md
+                                min-h-[60px] sm:min-h-[90px] aspect-square sm:aspect-auto flex flex-col p-1 sm:p-2 border rounded-xl relative transition-all cursor-pointer group hover:shadow-md
                                 ${pnl !== null ? (isPositive ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-red-500/10 border-red-500/30') : 'hover:bg-accent border-muted'}
                             `}
                                 >

@@ -1,0 +1,56 @@
+
+> trade-how@0.1.0 build
+> next build
+
+▲ Next.js 16.1.6 (Turbopack)
+- Environments: .env.local
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 4.9s
+  Running TypeScript ...
+  Collecting page data using 9 workers ...
+Error: Failed to collect configuration for /calendar
+    at ignore-listed frames {
+  [cause]: Error: Cannot find module '@opentelemetry/api'
+  Require stack:
+  - /Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/@google-cloud/firestore/build/src/telemetry/enabled-trace-util.js
+  - /Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/@google-cloud/firestore/build/src/index.js
+  - /Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/firebase-admin/lib/firestore/index.js
+  - /Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/firebase-admin/lib/app/firebase-namespace.js
+  - /Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/firebase-admin/lib/default-namespace.js
+  - /Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/firebase-admin/lib/index.js
+  - /Users/sravankumar/.gemini/antigravity/scratch/trade-how/.next/server/chunks/ssr/[root-of-the-server]__d70168c2._.js
+  - /Users/sravankumar/.gemini/antigravity/scratch/trade-how/.next/server/chunks/ssr/[turbopack]_runtime.js
+  - /Users/sravankumar/.gemini/antigravity/scratch/trade-how/.next/server/app/calendar/page.js
+  - /Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/next/dist/server/require.js
+  - /Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/next/dist/server/load-components.js
+  - /Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/next/dist/build/utils.js
+  - /Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/next/dist/build/worker.js
+  - /Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/next/dist/compiled/jest-worker/processChild.js
+      at ignore-listed frames {
+    code: 'MODULE_NOT_FOUND',
+    requireStack: [
+      '/Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/@google-cloud/firestore/build/src/telemetry/enabled-trace-util.js',
+      '/Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/@google-cloud/firestore/build/src/index.js',
+      '/Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/firebase-admin/lib/firestore/index.js',
+      '/Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/firebase-admin/lib/app/firebase-namespace.js',
+      '/Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/firebase-admin/lib/default-namespace.js',
+      '/Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/firebase-admin/lib/index.js',
+      '/Users/sravankumar/.gemini/antigravity/scratch/trade-how/.next/server/chunks/ssr/[root-of-the-server]__d70168c2._.js',
+      '/Users/sravankumar/.gemini/antigravity/scratch/trade-how/.next/server/chunks/ssr/[turbopack]_runtime.js',
+      '/Users/sravankumar/.gemini/antigravity/scratch/trade-how/.next/server/app/calendar/page.js',
+      '/Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/next/dist/server/require.js',
+      '/Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/next/dist/server/load-components.js',
+      '/Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/next/dist/build/utils.js',
+      '/Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/next/dist/build/worker.js',
+      '/Users/sravankumar/.gemini/antigravity/scratch/trade-how/node_modules/next/dist/compiled/jest-worker/processChild.js'
+    ]
+  }
+}
+
+> Build error occurred
+Error: Failed to collect page data for /calendar
+    at ignore-listed frames {
+  type: 'Error'
+}
