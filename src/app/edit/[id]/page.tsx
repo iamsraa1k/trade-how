@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 import { redirect } from "next/navigation"
 
-export default async function EditTradePage({ params }: { params: { id: string } }) {
+export default async function EditTradePage({ params }: { params: Promise<{ id: string }> }) {
     const session = await getServerSession(authOptions)
 
     if (!session || !session.user?.email) {
@@ -13,11 +13,12 @@ export default async function EditTradePage({ params }: { params: { id: string }
 
     const { email } = session.user
     
-    // Await params object for Next.js 15+ constraints if necessary, but typically standard format is okay contextually here 
-    // or just fetch concurrently.
+    // Await params object for Next.js 15+ constraints
+    const { id } = await params;
+    
     const [rules, trade] = await Promise.all([
         getRules(email),
-        getTradeById(params.id, email)
+        getTradeById(id, email)
     ])
 
     if (!trade) {
@@ -31,7 +32,7 @@ export default async function EditTradePage({ params }: { params: { id: string }
 
     return (
         <div className="w-full h-full max-w-4xl mx-auto pb-12">
-            <TradeForm rules={rules} initialData={trade} id={params.id} />
+            <TradeForm rules={rules} initialData={trade} id={id} />
         </div>
     )
 }
