@@ -99,9 +99,6 @@ export function TradeTable({ trades, rules }: { trades: Trade[], rules: Rule[] }
                     doc.text(`Qty: ${trade.quantity} | En: ${trade.entryPrice} | Ex: ${trade.exitPrice} | Fee: ${trade.fees}`, 14, currentY);
                     currentY += 5;
                 } else {
-                    doc.text(`Total Fees: ${trade.fees}`, 14, currentY);
-                    currentY += 5;
-                    // Legs
                     if (trade.legs) {
                         trade.legs.forEach((leg: any, i: number) => {
                             if (currentY > 280) { doc.addPage(); currentY = 20; }
@@ -198,7 +195,7 @@ export function TradeTable({ trades, rules }: { trades: Trade[], rules: Rule[] }
                                                     <div className="flex gap-2.5 text-[10px] sm:text-xs">
                                                         <span><span className="text-muted-foreground mr-0.5">En:</span>₹{leg.entryPrice || 0}</span>
                                                         <span><span className="text-muted-foreground mr-0.5">Ex:</span>₹{leg.exitPrice || 0}</span>
-                                                        <span className="text-red-500/80"><span className="text-muted-foreground mr-0.5">Fee:</span>₹{leg.fees || 0}</span>
+                                                        <span><span className="text-muted-foreground mr-0.5">Fee:</span>₹{leg.fees || 0}</span>
                                                     </div>
                                                 </div>
                                             ))}
