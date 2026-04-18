@@ -41,6 +41,21 @@ export async function getTrades(userId: string): Promise<Trade[]> {
     }
 }
 
+export async function getTradeById(id: string, userId: string): Promise<Trade | null> {
+    try {
+        const doc = await db.collection("trades").doc(id).get();
+        if (!doc.exists) return null;
+        
+        const data = doc.data();
+        if (data?.userId !== userId) return null;
+        
+        return { id: doc.id, ...data } as Trade;
+    } catch (error) {
+        console.error('Firestore Error getTradeById:', error);
+        return null;
+    }
+}
+
 export async function saveTrade(trade: Omit<Trade, 'id' | 'userId'>, userId: string): Promise<Trade> {
     const tradeData = {
         ...trade,

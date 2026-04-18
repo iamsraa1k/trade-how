@@ -16,32 +16,42 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { addNewTrade } from "@/app/actions"
+import { addNewTrade, updateTradeAction } from "@/app/actions"
 import { useRouter } from "next/navigation"
 import type { Rule } from "@/lib/db"
 
-export function TradeForm({ rules }: { rules: Rule[] }) {
+export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialData?: any, id?: string }) {
     const router = useRouter()
     const [isSubmitting, setIsSubmitting] = React.useState(false)
 
     // Form inputs state
     const [formData, setFormData] = React.useState({
-        entry: "",
-        exit: "",
-        quantity: "",
-        fees: "",
-        type: "buy", // buy | sell
-        pnl: "",
-        symbol: "",
-        analysis: "",
-        rules: [] as string[],
-        date: new Date().toISOString().split('T')[0]
+        entry: initialData?.entryPrice?.toString() || "",
+        exit: initialData?.exitPrice?.toString() || "",
+        quantity: initialData?.quantity?.toString() || "",
+        fees: initialData?.fees?.toString() || "",
+        type: initialData?.type || "buy", // buy | sell
+        pnl: initialData?.pnl?.toString() || "",
+        symbol: initialData?.symbol || "",
+        analysis: initialData?.analysis || "",
+        rules: initialData?.rules || ([] as string[]),
+        date: initialData?.date || new Date().toISOString().split('T')[0]
     })
 
-    const [isBasket, setIsBasket] = React.useState(false)
-    const [legs, setLegs] = React.useState([
-        { symbol: "", type: "buy", entry: "", exit: "", quantity: "", fees: "" }
-    ])
+    const [isBasket, setIsBasket] = React.useState<boolean>(!!initialData?.isBasket)
+    const [legs, setLegs] = React.useState(() => {
+        if (initialData?.legs?.length > 0) {
+            return initialData.legs.map((l:any) => ({
+                symbol: l.symbol || "",
+                type: l.type || "buy",
+                entry: l.entryPrice?.toString() || "",
+                exit: l.exitPrice?.toString() || "",
+                quantity: l.quantity?.toString() || "",
+                fees: l.fees?.toString() || ""
+            }))
+        }
+        return [{ symbol: "", type: "buy", entry: "", exit: "", quantity: "", fees: "" }]
+    })
 
     const [calculatedPnl, setCalculatedPnl] = React.useState<number | null>(null)
 
@@ -56,7 +66,7 @@ export function TradeForm({ rules }: { rules: Rule[] }) {
                 if (target.checked) {
                     newData.rules = [...prev.rules, value];
                 } else {
-                    newData.rules = prev.rules.filter(r => r !== value);
+                    newData.rules = prev.rules.filter((r: string) => r !== value);
                 }
             } else {
                 (newData as any)[name] = value;
@@ -124,13 +134,13 @@ export function TradeForm({ rules }: { rules: Rule[] }) {
 
     const removeLeg = (index: number) => {
         if (legs.length === 1) return
-        const newLegs = legs.filter((_, i) => i !== index)
+        const newLegs = legs.filter((_: any, i: number) => i !== index)
         setLegs(newLegs)
         
         // Recalculate
         let totalPnl = 0
         let hasCalculableLeg = false
-        newLegs.forEach(leg => {
+        newLegs.forEach((leg: any) => {
             const entry = parseFloat(leg.entry) || 0
             const exit = parseFloat(leg.exit) || 0
             const qty = parseFloat(leg.quantity) || 0
@@ -160,12 +170,18 @@ export function TradeForm({ rules }: { rules: Rule[] }) {
                 formatiBasketLegs(data)
             }
             
-            const result = await addNewTrade(data)
+            let result;
+            if (id) {
+                result = await updateTradeAction(id, data);
+            } else {
+                result = await addNewTrade(data);
+            }
+
             if (result?.error) {
                 toast.error(result.error)
             } else {
-                toast.success("Trade saved successfully")
-                router.push("/trades") // Redirecting to trades log instead of dashboard directly for better UX
+                toast.success(id ? "Trade updated successfully!" : "Trade saved successfully")
+                router.push("/trades")
                 router.refresh()
             }
         } catch (error) {
@@ -176,10 +192,9 @@ export function TradeForm({ rules }: { rules: Rule[] }) {
         }
     }
     
-    // Process legs array for form submission cleanly
     const formatiBasketLegs = (data: FormData) => {
-        const cleanLegs = legs.map(l => ({
-            symbol: l.symbol || formData.symbol, // fallback to main symbol
+        const cleanLegs = legs.map((l: any) => ({
+            symbol: l.symbol || formData.symbol,
             type: l.type,
             entryPrice: parseFloat(l.entry) || 0,
             exitPrice: parseFloat(l.exit) || 0,
@@ -188,7 +203,6 @@ export function TradeForm({ rules }: { rules: Rule[] }) {
         }))
         data.append("legsData", JSON.stringify(cleanLegs))
         
-        // Ensure main generic values correspond to the basket so legacy UI doesn't break
         if (!data.has("entry")) data.set("entry", "0")
         if (!data.has("exit")) data.set("exit", "0")
         if (!data.has("quantity")) data.set("quantity", "0")
@@ -199,10 +213,10 @@ export function TradeForm({ rules }: { rules: Rule[] }) {
         <Card className="w-full shadow-xl border-zinc-200 dark:border-zinc-800 bg-card">
             <CardHeader className="border-b border-border/50 pb-6">
                 <CardTitle className="text-2xl font-bold flex items-center gap-2">
-                    Trade Entry
+                    {id ? "Edit Trade" : "Trade Entry"}
                 </CardTitle>
                 <CardDescription>
-                    Record your execution details. Multi-leg basket orders supported.
+                    {id ? "Modify your logged position." : "Record your execution details. Multi-leg basket orders supported."}
                 </CardDescription>
             </CardHeader>
             <CardContent className="pt-6">
@@ -214,7 +228,7 @@ export function TradeForm({ rules }: { rules: Rule[] }) {
                                 1. Trade Details
                             </h3>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-muted/20 p-4 rounded-xl border border-border/50">
+                        <div className="flex flex-col md:grid md:grid-cols-2 gap-4 md:gap-6 bg-muted/20 p-4 rounded-xl border border-border/50">
                             <div className="space-y-2">
                                 <Label htmlFor="date">Date</Label>
                                 <Input
@@ -222,7 +236,7 @@ export function TradeForm({ rules }: { rules: Rule[] }) {
                                     name="date"
                                     id="date"
                                     required
-                                    className="bg-background shadow-sm"
+                                    className="bg-background shadow-sm w-full"
                                     value={formData.date}
                                     onChange={handleInput}
                                 />
@@ -235,21 +249,21 @@ export function TradeForm({ rules }: { rules: Rule[] }) {
                                     id="symbol"
                                     placeholder="e.g. NIFTY or STRANGLE"
                                     required
-                                    className="bg-background font-mono uppercase shadow-sm"
+                                    className="bg-background font-mono uppercase shadow-sm w-full"
                                     value={formData.symbol}
                                     onChange={handleInput}
                                 />
                             </div>
                             
                             {!isBasket && (
-                                <div className="space-y-2">
+                                <div className="space-y-2 md:col-span-2 lg:col-span-1">
                                     <Label htmlFor="type">Position Type</Label>
                                     <select
                                         name="type"
                                         id="type"
                                         value={formData.type}
                                         onChange={handleInput}
-                                        className="flex h-10 w-full items-center justify-between rounded-md border border-input shadow-sm bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                        className="flex h-10 w-full items-center justify-between rounded-md border border-input shadow-sm bg-background px-3 py-2 text-sm ring-offset-background disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                         <option value="buy">Buy</option>
                                         <option value="sell">Sell</option>
@@ -268,7 +282,6 @@ export function TradeForm({ rules }: { rules: Rule[] }) {
                             <div className="flex items-center space-x-2 bg-muted/30 p-2 rounded-lg border shadow-sm">
                                 <Switch id="basket-mode" checked={isBasket} onCheckedChange={(checked: boolean) => {
                                     setIsBasket(checked)
-                                    // Reset calculation visually
                                     setCalculatedPnl(null)
                                 }} />
                                 <Label htmlFor="basket-mode" className="text-sm cursor-pointer whitespace-nowrap text-foreground font-medium">Basket / Multi-leg</Label>
@@ -277,39 +290,42 @@ export function TradeForm({ rules }: { rules: Rule[] }) {
 
                         {isBasket ? (
                             <div className="space-y-4">
-                                {legs.map((leg, index) => (
-                                    <div key={index} className="grid grid-cols-2 md:grid-cols-6 gap-3 bg-muted/10 p-4 rounded-xl border border-border/50 relative shadow-sm group">
+                                {legs.map((leg: any, index: number) => (
+                                    <div key={index} className="flex flex-col md:grid md:grid-cols-6 gap-3 bg-muted/10 p-4 pt-5 rounded-xl border border-border/50 relative shadow-sm group">
                                         <div className="absolute -left-2.5 -top-2.5 bg-primary text-primary-foreground w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shadow-md z-10">
                                             {index + 1}
                                         </div>
                                         {legs.length > 1 && (
-                                            <Button type="button" size="icon" variant="destructive" onClick={() => removeLeg(index)} className="absolute -top-3 -right-3 h-7 w-7 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md z-10">
-                                                <Trash2 className="h-3 w-3" />
+                                            <Button type="button" size="icon" variant="destructive" onClick={() => removeLeg(index)} className="absolute -top-3 -right-3 h-7 w-7 rounded-full sm:opacity-0 group-hover:opacity-100 transition-opacity shadow-md z-10">
+                                                <Trash2 className="h-4 w-4" />
                                             </Button>
                                         )}
                                         
                                         <div className="space-y-1.5 md:col-span-2">
                                             <Label className="text-xs">Leg Symbol <span className="text-muted-foreground font-normal">(if diff)</span></Label>
-                                            <Input name="symbol" placeholder="e.g. 23500 CE" value={leg.symbol} onChange={(e) => handleLegInput(index, e)} className="h-8 text-sm bg-background font-mono uppercase" />
+                                            <Input name="symbol" placeholder="e.g. 23500 CE" value={leg.symbol} onChange={(e) => handleLegInput(index, e)} className="h-9 text-sm w-full bg-background font-mono uppercase" />
                                         </div>
-                                        <div className="space-y-1.5">
-                                            <Label className="text-xs">Action</Label>
-                                            <select name="type" value={leg.type} onChange={(e) => handleLegInput(index, e)} className="flex h-8 w-full items-center justify-between rounded-md border border-input bg-background px-2 text-xs">
-                                                <option value="buy">Buy</option>
-                                                <option value="sell">Sell</option>
-                                            </select>
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <Label className="text-xs">Qty / Lots</Label>
-                                            <Input type="number" name="quantity" value={leg.quantity} onChange={(e) => handleLegInput(index, e)} className="h-8 text-sm bg-background" />
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <Label className="text-xs">Entry</Label>
-                                            <Input type="number" step="any" name="entry" value={leg.entry} onChange={(e) => handleLegInput(index, e)} className="h-8 text-sm bg-background" />
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <Label className="text-xs">Exit</Label>
-                                            <Input type="number" step="any" name="exit" value={leg.exit} onChange={(e) => handleLegInput(index, e)} className="h-8 text-sm bg-background" />
+                                        
+                                        <div className="grid grid-cols-2 md:grid-cols-4 md:col-span-4 gap-3">
+                                            <div className="space-y-1.5">
+                                                <Label className="text-xs">Action</Label>
+                                                <select name="type" value={leg.type} onChange={(e) => handleLegInput(index, e)} className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-2 text-sm">
+                                                    <option value="buy">Buy</option>
+                                                    <option value="sell">Sell</option>
+                                                </select>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label className="text-xs">Qty / Lots</Label>
+                                                <Input type="number" name="quantity" value={leg.quantity} onChange={(e) => handleLegInput(index, e)} className="h-9 w-full text-sm bg-background" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label className="text-xs">Entry</Label>
+                                                <Input type="number" step="any" name="entry" value={leg.entry} onChange={(e) => handleLegInput(index, e)} className="h-9 w-full text-sm bg-background" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label className="text-xs">Exit</Label>
+                                                <Input type="number" step="any" name="exit" value={leg.exit} onChange={(e) => handleLegInput(index, e)} className="h-9 w-full text-sm bg-background" />
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -323,7 +339,7 @@ export function TradeForm({ rules }: { rules: Rule[] }) {
                                     <Label htmlFor="entry">Entry Price (₹)</Label>
                                     <Input
                                         type="number" name="entry" id="entry" placeholder="0.00" step="any"
-                                        className="bg-background font-mono shadow-sm"
+                                        className="bg-background font-mono shadow-sm w-full"
                                         value={formData.entry} onChange={handleInput}
                                     />
                                 </div>
@@ -331,23 +347,23 @@ export function TradeForm({ rules }: { rules: Rule[] }) {
                                     <Label htmlFor="exit">Exit Price (₹)</Label>
                                     <Input
                                         type="number" name="exit" id="exit" placeholder="0.00" step="any"
-                                        className="bg-background font-mono shadow-sm"
+                                        className="bg-background font-mono shadow-sm w-full"
                                         value={formData.exit} onChange={handleInput}
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="quantity">Quantity / Lots</Label>
+                                    <Label htmlFor="quantity">Qty / Lots</Label>
                                     <Input
                                         type="number" name="quantity" id="quantity" placeholder="1"
-                                        className="bg-background font-mono shadow-sm"
+                                        className="bg-background font-mono shadow-sm w-full"
                                         value={formData.quantity} onChange={handleInput}
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="fees">Charges & Fees (₹)</Label>
+                                    <Label htmlFor="fees">Fees (₹)</Label>
                                     <Input
                                         type="number" name="fees" id="fees" placeholder="0.00" step="any"
-                                        className="bg-background font-mono shadow-sm"
+                                        className="bg-background font-mono shadow-sm w-full"
                                         value={formData.fees} onChange={handleInput}
                                     />
                                 </div>
@@ -371,7 +387,7 @@ export function TradeForm({ rules }: { rules: Rule[] }) {
                                         id="pnl"
                                         placeholder="0.00"
                                         step="any"
-                                        className={`pl-10 font-bold text-2xl h-14 transition-colors ${parseFloat(formData.pnl) > 0 ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-500 text-emerald-600' : parseFloat(formData.pnl) < 0 ? 'bg-red-50 dark:bg-red-950/20 border-red-500 text-red-600' : 'bg-background'}`}
+                                        className={`pl-10 font-bold text-2xl h-14 transition-colors w-full ${parseFloat(formData.pnl) > 0 ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-500 text-emerald-600' : parseFloat(formData.pnl) < 0 ? 'bg-red-50 dark:bg-red-950/20 border-red-500 text-red-600' : 'bg-background'}`}
                                         required
                                         value={formData.pnl}
                                         onChange={handleInput}
@@ -401,7 +417,7 @@ export function TradeForm({ rules }: { rules: Rule[] }) {
                                     name="analysis"
                                     id="analysis"
                                     placeholder="Why did you take this trade? What happened? (Optional)"
-                                    className="min-h-[80px] bg-background shadow-sm"
+                                    className="min-h-[80px] bg-background shadow-sm w-full"
                                     value={formData.analysis}
                                     onChange={handleInput}
                                 />
@@ -443,7 +459,7 @@ export function TradeForm({ rules }: { rules: Rule[] }) {
                                 <>Saving...</>
                             ) : (
                                 <>
-                                    <Save className="mr-2 h-5 w-5" /> Save Trade
+                                    <Save className="mr-2 h-5 w-5" /> {id ? "Update Trade" : "Save Trade"}
                                 </>
                             )}
                         </Button>

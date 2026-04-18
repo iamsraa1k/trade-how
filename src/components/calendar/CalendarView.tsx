@@ -5,7 +5,10 @@ import type { Trade, Rule } from "@/lib/db"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from "date-fns"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight, Star } from "lucide-react"
+import { ChevronLeft, ChevronRight, Star, Trash2, Edit } from "lucide-react"
+import { deleteTradeAction } from "@/app/actions"
+import Link from "next/link"
+import { toast } from "sonner"
 import {
     Dialog,
     DialogContent,
@@ -14,6 +17,15 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { motion } from "framer-motion"
+
+const formatCompactNumber = (num: number) => {
+    if (num === 0) return '0';
+    const abs = Math.abs(num);
+    const sign = num < 0 ? '-' : '+';
+    if (abs >= 100000) return sign + (abs / 100000).toFixed(1) + 'L';
+    if (abs >= 1000) return sign + (abs / 1000).toFixed(1) + 'k';
+    return sign + abs.toFixed(0);
+}
 
 export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[] }) {
     const [currentMonth, setCurrentMonth] = useState(new Date())
@@ -53,9 +65,21 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
         selectedDayTotalPnl = selectedTrades.reduce((acc, t) => acc + t.pnl, 0);
     }
 
+    const handleDelete = async (e: React.MouseEvent, id: string) => {
+        e.stopPropagation();
+        if (confirm("Are you sure you want to delete this trade?")) {
+            await deleteTradeAction(id);
+            toast.success("Trade deleted successfully");
+            // If it was the last trade for the day, close modal
+            if (selectedTrades.length <= 1) {
+                setIsDayModalOpen(false);
+            }
+        }
+    }
+
     return (
         <div className="space-y-6">
-            <Card className="h-full border-zinc-200 dark:border-zinc-800 shadow-lg flex flex-col">
+            <Card className="border-zinc-200 dark:border-zinc-800 shadow-lg flex flex-col">
                 <CardHeader className="flex flex-col sm:flex-row items-center justify-between pb-6 gap-4 border-b border-zinc-100 dark:border-zinc-800/50">
                     <CardTitle className="text-xl sm:text-2xl font-bold">Month View</CardTitle>
                     <div className="flex items-center gap-2 sm:gap-4 bg-muted/30 p-1 rounded-lg">
@@ -119,9 +143,8 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                                             {/* Mobile view - Simple pill dot with minimal space to prevent collision */}
                                             <div className="sm:hidden flex flex-col items-center gap-1 w-full">
                                                 <div className={`w-full max-w-[24px] h-1 rounded-full ${isPositive ? "bg-emerald-500" : "bg-red-500"}`}></div>
-                                                {/* Optional: Add very tiny shorthand text for mobile if desired, or keep clean */}
-                                                <span className={`text-[8px] font-bold tracking-tighter truncate w-full text-center px-0.5 ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                                                  {isPositive ? '+' : ''}{pnl >= 1000 ? (pnl/1000).toFixed(1)+'k' : pnl}
+                                                <span className={`text-[9px] font-extrabold tracking-tighter truncate w-full text-center px-0.5 ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                                                  {formatCompactNumber(pnl)}
                                                 </span>
                                             </div>
                                             
@@ -148,9 +171,9 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                         <DialogDescription>Review individual trades taken on this day.</DialogDescription>
                     </DialogHeader>
 
-                    {/* NEW: Explicit Total PnL for the Day */}
+                    {/* Explicit Total PnL for the Day */}
                     <div className="py-4 border-b">
-                        <div className="flex justify-between items-center px-4 py-3 bg-muted/30 rounded-lg border">
+                        <div className="flex justify-between items-center px-4 py-3 bg-muted/30 rounded-lg border shadow-inner">
                             <span className="font-semibold text-lg">Total Daily Returns</span>
                             <span className={`font-bold text-2xl ${selectedDayTotalPnl > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                                 {selectedDayTotalPnl > 0 ? '+' : ''}{selectedDayTotalPnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
@@ -158,18 +181,39 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                         </div>
                     </div>
 
-                    <div className="space-y-4 mt-2">
+                    <div className="space-y-4 mt-4">
                         {selectedTrades.map((trade, idx) => (
-                            <div key={trade.id} className="p-3 border rounded-lg bg-card">
-                                <div className="flex justify-between items-center mb-1">
-                                    <span className="font-bold">{trade.symbol}</span>
-                                    <span className={`font-medium ${trade.pnl > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                        {trade.pnl > 0 ? '+' : ''}{trade.pnl}
+                            <div key={trade.id} className="group relative p-4 border rounded-xl bg-card hover:bg-muted/30 hover:border-primary/30 transition-all shadow-sm">
+                                <div className="flex justify-between items-start mb-2">
+                                    <div>
+                                        <span className="font-bold text-lg flex items-center gap-2">
+                                            {trade.symbol} 
+                                            {trade.isBasket && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full dark:bg-purple-900/30 dark:text-purple-400">BASKET</span>}
+                                        </span>
+                                        <div className="text-xs text-muted-foreground flex gap-3 mt-1">
+                                            <span>Type: <span className="uppercase font-semibold text-foreground">{trade.isBasket ? "-" : trade.type}</span></span>
+                                            {!trade.isBasket && <span>Qty: <span className="font-semibold text-foreground">{trade.quantity}</span></span>}
+                                        </div>
+                                    </div>
+                                    <span className={`font-bold text-lg flex flex-col items-end ${trade.pnl > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                        {trade.pnl > 0 ? '+' : ''}{trade.pnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                                     </span>
                                 </div>
-                                <div className="text-xs text-muted-foreground flex gap-3">
-                                    <span>Type: <span className="uppercase font-semibold">{trade.type}</span></span>
-                                    <span>Qty: {trade.quantity}</span>
+                                {trade.analysis && (
+                                     <p className="text-sm mt-3 text-muted-foreground line-clamp-2 bg-muted/20 p-2 rounded-md">
+                                        &quot;{trade.analysis}&quot;
+                                     </p>
+                                )}
+                                
+                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 bg-background shadow-md border p-1 rounded-md">
+                                    <Link href={`/edit/${trade.id}`}>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50">
+                                            <Edit className="h-4 w-4" />
+                                        </Button>
+                                    </Link>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/50" onClick={(e) => handleDelete(e, trade.id)}>
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
                                 </div>
                             </div>
                         ))}
