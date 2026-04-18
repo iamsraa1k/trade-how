@@ -301,12 +301,11 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                                             </Button>
                                         )}
                                         
-                                        <div className="space-y-1.5 md:col-span-2">
-                                            <Label className="text-xs">Leg Symbol <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                                            <Input name="symbol" placeholder="e.g. 23500 CE" value={leg.symbol} onChange={(e) => handleLegInput(index, e)} className="h-9 text-sm w-full bg-background font-mono uppercase" />
-                                        </div>
-                                        
-                                        <div className="grid grid-cols-2 md:grid-cols-4 md:col-span-4 gap-3">
+                                        <div className="grid grid-cols-2 md:grid-cols-5 md:col-span-5 gap-3 mt-2 md:mt-0">
+                                            <div className="space-y-1.5 md:col-span-2">
+                                                <Label className="text-xs">Leg Symbol <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                                                <Input name="symbol" placeholder="e.g. 23500 CE" value={leg.symbol} onChange={(e) => handleLegInput(index, e)} className="h-9 text-sm w-full bg-background font-mono uppercase" />
+                                            </div>
                                             <div className="space-y-1.5">
                                                 <Label className="text-xs">Action</Label>
                                                 <select name="type" value={leg.type} onChange={(e) => handleLegInput(index, e)} className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-2 text-sm">
@@ -325,6 +324,10 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                                             <div className="space-y-1.5">
                                                 <Label className="text-xs">Exit</Label>
                                                 <Input type="number" step="any" name="exit" value={leg.exit} onChange={(e) => handleLegInput(index, e)} className="h-9 w-full text-sm bg-background" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label className="text-xs">Charges</Label>
+                                                <Input type="number" step="any" name="fees" value={leg.fees || ""} onChange={(e) => handleLegInput(index, e)} className="h-9 w-full text-sm bg-background" placeholder="0" />
                                             </div>
                                         </div>
                                     </div>
