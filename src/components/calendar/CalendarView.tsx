@@ -78,23 +78,23 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
     }
 
     return (
-        <div className="space-y-6">
-            <Card className="border-zinc-200 dark:border-zinc-800 shadow-lg flex flex-col">
-                <CardHeader className="flex flex-col sm:flex-row items-center justify-between pb-6 gap-4 border-b border-zinc-100 dark:border-zinc-800/50">
+        <div className="w-full">
+            <Card className="border-zinc-200 dark:border-zinc-800 shadow-md flex flex-col">
+                <CardHeader className="flex flex-col sm:flex-row items-center justify-between pb-4 pt-5 gap-4 border-b border-zinc-100 dark:border-zinc-800/50">
                     <CardTitle className="text-xl sm:text-2xl font-bold">Month View</CardTitle>
-                    <div className="flex items-center gap-2 sm:gap-4 bg-muted/30 p-1 rounded-lg">
-                        <Button variant="ghost" size="icon" onClick={prevMonth}>
+                    <div className="flex items-center gap-2 sm:gap-4 bg-muted/40 p-1.5 rounded-lg border shadow-sm">
+                        <Button variant="ghost" size="icon" onClick={prevMonth} className="h-8 w-8 hover:bg-background">
                             <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
                         </Button>
-                        <span className="min-w-[100px] sm:min-w-[120px] text-center font-semibold text-sm sm:text-lg">
+                        <span className="min-w-[100px] sm:min-w-[120px] text-center font-bold text-sm sm:text-lg tracking-tight">
                             {format(currentMonth, 'MMMM yyyy')}
                         </span>
-                        <Button variant="ghost" size="icon" onClick={nextMonth}>
+                        <Button variant="ghost" size="icon" onClick={nextMonth} className="h-8 w-8 hover:bg-background">
                             <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
                         </Button>
                     </div>
                 </CardHeader>
-                <CardContent className="flex-1 p-2 sm:p-6 overflow-hidden">
+                <CardContent className="flex-1 p-2 sm:p-4 overflow-hidden bg-muted/5">
                     <div className="grid grid-cols-7 gap-1 sm:gap-2 content-start">
                         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
                             <div key={d} className="text-center text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">{d}</div>

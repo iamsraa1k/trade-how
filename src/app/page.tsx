@@ -16,7 +16,7 @@ export default async function Home() {
   const rules = await getRules(session.user.email);
 
   return (
-    <div className="w-full h-full max-w-[1400px] mx-auto space-y-12 pb-12">
+    <div className="w-full h-full max-w-[1400px] mx-auto space-y-6 pb-12">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dashboard Overview</h1>
         <p className="text-muted-foreground mt-1">Summary of your trading metrics.</p>

@@ -77,27 +77,27 @@ export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] })
     }, [filteredTrades]);
 
     return (
-        <div className="space-y-8 flex flex-col">
+        <div className="space-y-5 flex flex-col pt-2">
             <div className="flex flex-col lg:flex-row gap-4">
-                <div className="flex-1 flex flex-col sm:flex-row justify-between items-center bg-card p-6 rounded-xl shadow-sm border gap-4">
+                <div className="flex-1 flex flex-col sm:flex-row justify-between items-center bg-card p-4 sm:p-5 rounded-xl shadow-sm border gap-4">
                     <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 w-full sm:w-auto text-center sm:text-left">
                         <span className="text-sm font-medium text-muted-foreground sm:mr-2">This Month&#39;s Realized P/L:</span>
-                        <span className={`text-3xl sm:text-4xl font-bold ${totalMonthlyPnl >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                        <span className={`text-3xl sm:text-4xl font-bold tracking-tight drop-shadow-sm ${totalMonthlyPnl >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                             {totalMonthlyPnl >= 0 ? '+' : ''}{totalMonthlyPnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                         </span>
                     </div>
                 </div>
             </div>
 
-            <div className="pt-2 w-full max-w-5xl mx-auto">
+            <div className="w-full pb-2">
                 <CalendarView trades={trades} rules={rules} />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                 {/* Win Rate Chart */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
                     <Card className="h-full shadow-md border hover:shadow-lg transition-shadow">
-                        <CardHeader className="pb-2">
+                        <CardHeader className="pb-2 pt-5">
                             <CardTitle className="text-lg sm:text-xl text-center sm:text-left">Win Rate ({format(currentMonth, "MMM yyyy")})</CardTitle>
                         </CardHeader>
                         <CardContent className="flex flex-col items-center justify-center p-4">
@@ -130,9 +130,9 @@ export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] })
                 </motion.div>
 
                 {/* Rules Chart */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
+                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }}>
                     <Card className="h-full shadow-md border hover:shadow-lg transition-shadow">
-                        <CardHeader className="pb-2">
+                        <CardHeader className="pb-2 pt-5">
                             <CardTitle className="text-lg sm:text-xl text-center sm:text-left">Discipline Breakdown</CardTitle>
                         </CardHeader>
                         <CardContent className="flex flex-col items-center justify-center p-4">
@@ -167,7 +167,7 @@ export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] })
                 </motion.div>
             </div>
 
-            <div className="flex flex-col sm:flex-row justify-between items-center bg-card p-6 rounded-xl shadow-sm border mt-4">
+            <div className="flex flex-col sm:flex-row justify-between items-center bg-card p-4 sm:p-5 rounded-xl shadow-sm border mt-2">
                 <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
                     <div className="flex items-center gap-2 w-full sm:w-auto justify-center sm:justify-start">
                         <Label htmlFor="custom-start" className="text-xs text-muted-foreground whitespace-nowrap">From</Label>
