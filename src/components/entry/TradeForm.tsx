@@ -224,7 +224,7 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                     {/* Section 1: Asset Details */}
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                            <h3 className="text-lg font-semibold flex items-center gap-2 text-primary">
+                            <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2 text-primary">
                                 1. Trade Details
                             </h3>
                         </div>
@@ -243,7 +243,7 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                             </div>
 
                             <div className="space-y-2">
-                                <Label htmlFor="symbol">Symbol / Asset (Primary)</Label>
+                                <Label htmlFor="symbol">Symbol / Asset</Label>
                                 <Input
                                     name="symbol"
                                     id="symbol"
@@ -276,15 +276,15 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                     {/* Section 2: Execution Logic */}
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                            <h3 className="text-lg font-semibold flex items-center gap-2 text-primary">
+                            <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2 text-primary">
                                 2. Execution (₹)
                             </h3>
-                            <div className="flex items-center space-x-2 bg-muted/30 p-2 rounded-lg border shadow-sm">
+                            <div className="flex items-center space-x-2 bg-muted/30 p-1.5 sm:p-2 rounded-lg border shadow-sm">
                                 <Switch id="basket-mode" checked={isBasket} onCheckedChange={(checked: boolean) => {
                                     setIsBasket(checked)
                                     setCalculatedPnl(null)
                                 }} />
-                                <Label htmlFor="basket-mode" className="text-sm cursor-pointer whitespace-nowrap text-foreground font-medium">Basket / Multi-leg</Label>
+                                <Label htmlFor="basket-mode" className="text-xs sm:text-sm cursor-pointer whitespace-nowrap text-foreground font-medium">Basket Order</Label>
                             </div>
                         </div>
 
@@ -302,7 +302,7 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                                         )}
                                         
                                         <div className="space-y-1.5 md:col-span-2">
-                                            <Label className="text-xs">Leg Symbol <span className="text-muted-foreground font-normal">(if diff)</span></Label>
+                                            <Label className="text-xs">Leg Symbol <span className="text-muted-foreground font-normal">(optional)</span></Label>
                                             <Input name="symbol" placeholder="e.g. 23500 CE" value={leg.symbol} onChange={(e) => handleLegInput(index, e)} className="h-9 text-sm w-full bg-background font-mono uppercase" />
                                         </div>
                                         
@@ -336,7 +336,7 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                         ) : (
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-muted/20 p-4 rounded-xl border border-border/50">
                                 <div className="space-y-2">
-                                    <Label htmlFor="entry">Entry Price (₹)</Label>
+                                    <Label htmlFor="entry">Entry (₹)</Label>
                                     <Input
                                         type="number" name="entry" id="entry" placeholder="0.00" step="any"
                                         className="bg-background font-mono shadow-sm w-full"
@@ -344,7 +344,7 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="exit">Exit Price (₹)</Label>
+                                    <Label htmlFor="exit">Exit (₹)</Label>
                                     <Input
                                         type="number" name="exit" id="exit" placeholder="0.00" step="any"
                                         className="bg-background font-mono shadow-sm w-full"
@@ -373,12 +373,12 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
 
                     {/* Section 3: Calculated Outcome */}
                     <div className="space-y-4">
-                        <h3 className="text-lg font-semibold flex items-center gap-2 text-primary">
+                        <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2 text-primary">
                             3. Net Outcome
                         </h3>
                         <div className="bg-muted/20 p-4 rounded-xl border border-border/50 flex flex-col md:flex-row gap-6 items-center">
                             <div className="flex-1 w-full relative">
-                                <Label htmlFor="pnl" className="text-base mb-2 block font-medium">Realized P/L</Label>
+                                <Label htmlFor="pnl" className="text-sm border-b-0 mb-2 block font-medium">Realized P/L</Label>
                                 <div className="relative shadow-sm rounded-md">
                                     <Calculator className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                                     <Input
@@ -387,7 +387,7 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                                         id="pnl"
                                         placeholder="0.00"
                                         step="any"
-                                        className={`pl-10 font-bold text-2xl h-14 transition-colors w-full ${parseFloat(formData.pnl) > 0 ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-500 text-emerald-600' : parseFloat(formData.pnl) < 0 ? 'bg-red-50 dark:bg-red-950/20 border-red-500 text-red-600' : 'bg-background'}`}
+                                        className={`pl-10 font-bold text-xl sm:text-2xl h-12 sm:h-14 transition-colors w-full ${parseFloat(formData.pnl) > 0 ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-500 text-emerald-600' : parseFloat(formData.pnl) < 0 ? 'bg-red-50 dark:bg-red-950/20 border-red-500 text-red-600' : 'bg-background'}`}
                                         required
                                         value={formData.pnl}
                                         onChange={handleInput}
@@ -395,8 +395,8 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                                 </div>
                                 <div className="flex flex-col mt-2 min-h-[20px]">
                                     {calculatedPnl !== null && formData.pnl !== "" && calculatedPnl.toFixed(2) !== parseFloat(formData.pnl).toFixed(2) && (
-                                        <p className="text-xs text-red-500 font-medium bg-red-50 dark:bg-red-950 p-1.5 rounded-md inline-block w-fit">
-                                            Warning: Entered P/L does not match calculated P/L based on Entry/Exit.
+                                        <p className="text-[10px] sm:text-xs text-red-500 font-medium bg-red-50 dark:bg-red-950 p-1.5 rounded-md inline-block w-fit">
+                                            Warning: Entered P/L does not match calculated P/L.
                                         </p>
                                     )}
                                 </div>
@@ -406,7 +406,7 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
 
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                            <h3 className="text-lg font-semibold flex items-center gap-2 text-primary">
+                            <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2 text-primary">
                                 4. Psychology & Evidence
                             </h3>
                         </div>

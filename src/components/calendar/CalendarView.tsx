@@ -121,16 +121,16 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                                     transition={{ duration: 0.2, delay: i * 0.01 }}
                                     onClick={() => handleDayClick(day)}
                                     className={`
-                                min-h-[60px] sm:min-h-[100px] flex flex-col p-1 sm:p-3 border rounded-xl relative transition-all cursor-pointer group hover:shadow-xl hover:-translate-y-0.5
+                                min-h-[60px] sm:min-h-[100px] flex flex-col p-1 sm:p-2.5 border rounded-lg sm:rounded-xl relative transition-all cursor-pointer group hover:shadow-xl hover:-translate-y-0.5
                                 ${pnl !== null 
                                     ? (isPositive 
-                                        ? 'bg-gradient-to-br from-emerald-500/10 to-emerald-500/20 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.2)] dark:shadow-[inset_0_0_0_1px_rgba(16,185,129,0.1)] border-transparent' 
-                                        : 'bg-gradient-to-br from-red-500/10 to-red-500/20 shadow-[inset_0_0_0_1px_rgba(239,68,68,0.2)] dark:shadow-[inset_0_0_0_1px_rgba(239,68,68,0.1)] border-transparent') 
-                                    : 'bg-card hover:bg-accent border-border/50 shadow-sm'}
+                                        ? 'bg-emerald-50/70 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-900/50 shadow-sm hover:border-emerald-300 dark:hover:border-emerald-800' 
+                                        : 'bg-red-50/70 border-red-200 dark:bg-red-950/30 dark:border-red-900/50 shadow-sm hover:border-red-300 dark:hover:border-red-800') 
+                                    : 'bg-white dark:bg-[#121214] border-zinc-200 dark:border-zinc-800/80 shadow-sm hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-md'}
                             `}
                                 >
                                     <div className="flex justify-between items-start">
-                                        <span className={`text-[10px] sm:text-sm font-bold pl-0.5 ${pnl !== null ? (isPositive ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300') : 'text-muted-foreground group-hover:text-foreground'}`}>
+                                        <span className={`text-[10px] sm:text-sm font-bold pl-0.5 ${pnl !== null ? (isPositive ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300') : 'text-zinc-600 dark:text-zinc-400 group-hover:text-foreground'}`}>
                                             {format(day, 'd')}
                                         </span>
                                         {allFlawless && (
