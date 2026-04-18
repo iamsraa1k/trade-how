@@ -116,6 +116,8 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                                 rules.every(r => (t.rules || []).includes(r.text))
                             )
 
+                            const tradeCount = tradesForThatDay.reduce((count, t) => count + (t.isBasket && t.legs ? t.legs.length : 1), 0)
+
                             return (
                                 <motion.div
                                     key={day.toString()}
@@ -156,7 +158,7 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                                                 <span className={`text-xs md:text-sm lg:text-base font-extrabold tracking-tight truncate w-full text-center drop-shadow-sm ${isPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                                                     {isPositive ? '+' : ''}{pnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })}
                                                 </span>
-                                                <div className="text-[10px] mt-1 font-medium text-muted-foreground opacity-80">{tradesForThatDay.length} Trade{tradesForThatDay.length > 1 ? 's' : ''}</div>
+                                                <div className="text-[10px] mt-1 font-medium text-muted-foreground opacity-80">{tradeCount} Trade{tradeCount > 1 ? 's' : ''}</div>
                                             </div>
                                         </div>
                                     )}
@@ -184,18 +186,22 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                         </div>
                     </div>
 
-                    <div className="space-y-4 mt-4">
+                    <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto px-1 custom-scrollbar">
                         {selectedTrades.map((trade, idx) => (
                             <div key={trade.id} onClick={(e) => { e.stopPropagation(); setMobileActiveTradeId(mobileActiveTradeId === trade.id ? null : trade.id) }} className="group p-4 border rounded-xl bg-card hover:bg-muted/30 hover:border-primary/30 transition-all shadow-sm cursor-pointer sm:cursor-default">
                                 <div className="flex justify-between items-start mb-2 pointer-events-none sm:pointer-events-auto">
                                     <div>
                                         <span className="font-bold text-lg flex items-center gap-2">
                                             {trade.symbol} 
-                                            {trade.isBasket && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full dark:bg-purple-900/30 dark:text-purple-400">BASKET</span>}
+                                            {trade.isBasket && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full dark:bg-purple-900/30 dark:text-purple-400">BASKET ORDER • {trade.legs?.length || 0} LEGS</span>}
                                         </span>
                                         <div className="text-xs text-muted-foreground flex gap-3 mt-1">
-                                            <span>Type: <span className="uppercase font-semibold text-foreground">{trade.isBasket ? "-" : trade.type}</span></span>
-                                            {!trade.isBasket && <span>Qty: <span className="font-semibold text-foreground">{trade.quantity}</span></span>}
+                                            {!trade.isBasket && (
+                                                <>
+                                                    <span>Type: <span className="uppercase font-semibold text-foreground">{trade.type}</span></span>
+                                                    <span>Qty: <span className="font-semibold text-foreground">{trade.quantity}</span></span>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                     
@@ -223,11 +229,6 @@ export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[]
                                         )}
                                     </div>
                                 </div>
-                                {trade.analysis && (
-                                     <p className="text-sm mt-3 text-muted-foreground line-clamp-2 bg-muted/20 p-2 rounded-md border-l-2 border-l-primary/50 text-left pointer-events-none sm:pointer-events-auto">
-                                        &quot;{trade.analysis}&quot;
-                                     </p>
-                                )}
                             </div>
                         ))}
                     </div>

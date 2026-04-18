@@ -29,7 +29,7 @@ export function TradeTable({ trades, rules }: { trades: Trade[], rules: Rule[] }
         trades.forEach(t => {
             let legDetails = "Single Leg";
             if (t.isBasket && t.legs) {
-                legDetails = t.legs.map((l, i) => `L${i+1}[${l.type} Q:${l.quantity} In:${l.entryPrice} Out:${l.exitPrice}]`).join(" | ");
+                legDetails = t.legs.map((l, i) => `L${i+1}[${l.type} Q:${l.quantity} In:${l.entryPrice} Out:${l.exitPrice} F:${l.fees}]`).join(" | ");
             }
             
             const row = [
@@ -106,9 +106,9 @@ export function TradeTable({ trades, rules }: { trades: Trade[], rules: Rule[] }
                 doc.setTextColor(0);
                 if (trade.isBasket && trade.legs) {
                     doc.text(`BASKET ORDER: ${trade.legs.length} Executed Legs.`, 16, currentY + 20);
-                    doc.setFontSize(8);
+                    doc.setFontSize(7);
                     const legString = doc.splitTextToSize(
-                        trade.legs.map((l, i) => `L${i+1}: ${l.type.toUpperCase()} [Qty: ${l.quantity}]`).join(" | "), 
+                        trade.legs.map((l, i) => `L${i+1} ${l.symbol || ''}: ${l.type.toUpperCase()} [Q:${l.quantity} In:${l.entryPrice} Out:${l.exitPrice} F:${l.fees}]`).join(" | "), 
                         175
                     );
                     doc.text(legString, 16, currentY + 25);
@@ -208,9 +208,17 @@ export function TradeTable({ trades, rules }: { trades: Trade[], rules: Rule[] }
 
                                 <div className="space-y-1.5 text-sm mb-4 bg-muted/20 p-2 rounded-md">
                                     {trade.isBasket ? (
-                                        <div className="text-muted-foreground text-center py-2 h-[72px] flex flex-col justify-center">
-                                            <span className="font-medium text-foreground">{trade.legs?.length || 0}</span>
-                                            <span className="text-xs">Executed Legs</span>
+                                        <div className="flex flex-col gap-1 w-full max-h-[140px] overflow-y-auto custom-scrollbar pr-1">
+                                            {trade.legs?.map((leg: any, i: number) => (
+                                                <div key={i} className="flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs pb-1.5 border-b border-border/50 last:border-0 last:pb-0 mt-1 first:mt-0">
+                                                    <span className="font-semibold text-foreground/80">{leg.symbol || `Leg ${i+1}`} <span className="uppercase text-[9px] text-muted-foreground ml-1">{leg.type}</span></span>
+                                                    <div className="flex gap-2.5 text-[10px] sm:text-xs">
+                                                        <span><span className="text-muted-foreground mr-0.5">En:</span>₹{leg.entryPrice || 0}</span>
+                                                        <span><span className="text-muted-foreground mr-0.5">Ex:</span>₹{leg.exitPrice || 0}</span>
+                                                        <span className="text-red-500/80"><span className="text-muted-foreground mr-0.5">Fee:</span>₹{leg.fees || 0}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
                                     ) : (
                                         <>
@@ -231,7 +239,7 @@ export function TradeTable({ trades, rules }: { trades: Trade[], rules: Rule[] }
                                 </div>
 
                                 {trade.analysis && (
-                                    <div className="text-sm bg-muted/50 p-3 rounded-lg mb-4 line-clamp-3 text-muted-foreground">
+                                    <div className="text-sm bg-muted/50 p-3 rounded-lg mb-4 max-h-32 overflow-y-auto custom-scrollbar text-muted-foreground text-left">
                                         {trade.analysis}
                                     </div>
                                 )}
