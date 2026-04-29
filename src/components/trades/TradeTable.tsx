@@ -255,6 +255,11 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Tr
                             <span className="text-muted-foreground text-xs font-bold px-1">to</span>
                             <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-9 text-xs sm:text-sm bg-background border-none w-[120px] sm:w-auto" title="End Date" />
                         </div>
+                        {(startDate || endDate) && (
+                            <Button variant="ghost" size="sm" onClick={() => { setStartDate(""); setEndDate(""); }} className="h-9 text-xs text-muted-foreground hover:text-foreground">
+                                Clear
+                            </Button>
+                        )}
                     </div>
                 </div>
 
@@ -280,7 +285,7 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Tr
                                     <CalendarIcon className="h-5 w-5 text-muted-foreground" />
                                     {format(parseISO(date), "EEEE, MMMM d, yyyy")}
                                 </h2>
-                                <span className={`text-lg font-bold px-3 py-1 rounded-full ${dailyPnl >= 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+                                <span className={`text-sm sm:text-lg whitespace-nowrap font-bold px-2 sm:px-3 py-1 rounded-full ${dailyPnl >= 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
                                     {dailyPnl >= 0 ? '+' : ''}{dailyPnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                                 </span>
                             </div>

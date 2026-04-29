@@ -141,7 +141,7 @@ export function MonthlyView({ trades, rules, monthlyAnalyses }: { trades: Trade[
                     <DialogHeader className="px-6 pt-6 pb-4 border-b bg-muted/20">
                         <DialogTitle className="text-2xl font-bold flex items-center justify-between">
                             <span>{selectedMonthStr ? format(parseISO(`${selectedMonthStr}-01`), "MMMM yyyy") : ""} Analysis</span>
-                            <span className={`text-xl ${selectedMonthPnl > 0 ? 'text-emerald-600' : selectedMonthPnl < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                            <span className={`text-base sm:text-xl whitespace-nowrap ${selectedMonthPnl > 0 ? 'text-emerald-600' : selectedMonthPnl < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
                                 {selectedMonthPnl > 0 ? '+' : ''}{selectedMonthPnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                             </span>
                         </DialogTitle>
@@ -186,19 +186,33 @@ export function MonthlyView({ trades, rules, monthlyAnalyses }: { trades: Trade[
                                         <div className="max-h-[300px] overflow-y-auto custom-scrollbar pr-2 space-y-2">
                                             {selectedMonthTrades.length > 0 ? (
                                                 selectedMonthTrades.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(trade => (
-                                                    <div key={trade.id} className="flex justify-between items-center p-3 bg-card border rounded-lg shadow-sm">
-                                                        <div>
-                                                            <div className="font-bold flex items-center gap-2 text-sm">
-                                                                {trade.symbol} 
-                                                                <span className="text-[10px] text-muted-foreground">{format(new Date(trade.date), "MMM d")}</span>
+                                                    <div key={trade.id} className="flex flex-col p-3 bg-card border rounded-lg shadow-sm gap-2">
+                                                        <div className="flex justify-between items-start">
+                                                            <div>
+                                                                <div className="font-bold flex items-center gap-2 text-sm">
+                                                                    {trade.symbol} 
+                                                                    <span className="text-[10px] text-muted-foreground">{format(new Date(trade.date), "MMM d")}</span>
+                                                                </div>
+                                                                <div className="text-xs text-muted-foreground mt-0.5">
+                                                                    {trade.isBasket ? `Basket • ${trade.legs?.length || 0} legs` : trade.type.toUpperCase()}
+                                                                </div>
                                                             </div>
-                                                            <div className="text-xs text-muted-foreground mt-0.5">
-                                                                {trade.isBasket ? `Basket • ${trade.legs?.length || 0} legs` : trade.type.toUpperCase()}
+                                                            <div className={`font-bold text-sm ${trade.pnl > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                                                {trade.pnl > 0 ? '+' : ''}{trade.pnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                                                             </div>
                                                         </div>
-                                                        <div className={`font-bold ${trade.pnl > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                                            {trade.pnl > 0 ? '+' : ''}{trade.pnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
-                                                        </div>
+                                                        {(trade.analysis || (trade.rules && trade.rules.length > 0)) && (
+                                                            <div className="pt-2 border-t border-border/50 text-xs flex flex-col gap-1.5 mt-1">
+                                                                {trade.analysis && <p className="text-muted-foreground italic leading-relaxed">&ldquo;{trade.analysis}&rdquo;</p>}
+                                                                {trade.rules && trade.rules.length > 0 && (
+                                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                                        {trade.rules.map((r, i) => (
+                                                                            <span key={i} className="text-[9px] bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 px-1.5 py-0.5 rounded-sm border border-indigo-100 dark:border-indigo-800/50">{r}</span>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 ))
                                             ) : (

@@ -82,10 +82,11 @@ export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] })
     return (
         <div className="space-y-5 flex flex-col pt-2">
             <div className="flex flex-col lg:flex-row gap-4">
-                <div className="flex-1 flex flex-col sm:flex-row justify-between items-center bg-card p-4 sm:p-5 rounded-xl shadow-sm border gap-4">
-                    <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 w-full sm:w-auto text-center sm:text-left">
-                        <span className="text-sm font-medium text-muted-foreground sm:mr-2">This Month&#39;s Realized P/L:</span>
-                        <span className={`text-3xl sm:text-4xl font-bold tracking-tight drop-shadow-sm ${totalMonthlyPnl >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                <div className="flex-1 flex flex-col sm:flex-row justify-between items-center p-6 sm:p-8 rounded-2xl shadow-lg border relative overflow-hidden bg-card">
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-purple-500/5 to-transparent dark:from-indigo-500/10 dark:via-purple-500/10 z-0"></div>
+                    <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-6 w-full sm:w-auto text-center sm:text-left z-10">
+                        <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">This Month&#39;s Realized P/L</span>
+                        <span className={`text-4xl sm:text-5xl font-extrabold tracking-tighter drop-shadow-sm ${totalMonthlyPnl >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                             {totalMonthlyPnl >= 0 ? '+' : ''}{totalMonthlyPnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                         </span>
                     </div>
