@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from "react"
 import type { Trade, Rule } from "@/lib/db"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts"
 import { motion } from "framer-motion"
 import { startOfMonth, endOfMonth, format } from "date-fns"
 import { Label } from "@/components/ui/label"
@@ -41,19 +41,22 @@ export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] })
         const losingTrades = filteredTrades.filter((t) => t.pnl <= 0).length
         const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0
 
-        const rulesMap = new Map<string, number>()
+        const rulesMap = new Map<string, { freq: number, pnl: number }>()
         filteredTrades.forEach(t => {
             if (t.rules && Array.isArray(t.rules)) {
                 t.rules.forEach(r => {
-                    rulesMap.set(r, (rulesMap.get(r) || 0) + 1)
+                    const current = rulesMap.get(r) || { freq: 0, pnl: 0 }
+                    rulesMap.set(r, { freq: current.freq + 1, pnl: current.pnl + t.pnl })
                 })
             }
         })
 
         const rulesData = Array.from(rulesMap.entries())
-            .map(([name, value], index) => ({
-                name,
-                value,
+            .map(([name, data], index) => ({
+                name: name.length > 15 ? name.substring(0, 15) + '...' : name,
+                fullName: name,
+                value: data.freq,
+                pnl: data.pnl,
                 color: [`#10b981`, `#3b82f6`, `#8b5cf6`, `#f59e0b`, `#ec4899`, `#14b8a6`][index % 6]
             }))
             .sort((a, b) => b.value - a.value)
@@ -63,7 +66,7 @@ export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] })
             winningTrades,
             losingTrades,
             winRate,
-            rulesData: rulesData.length > 0 ? rulesData : [{ name: "No Data", value: 1, color: "#e5e7eb" }]
+            rulesData: rulesData.length > 0 ? rulesData : [{ name: "No Data", fullName: "No Data", value: 1, pnl: 0, color: "#e5e7eb" }]
         }
     }, [filteredTrades])
 
@@ -138,17 +141,24 @@ export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] })
                         <CardContent className="flex flex-col items-center justify-center p-4">
                             <div className="h-[250px] w-full min-h-[250px] relative flex items-center justify-center">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie data={metrics.rulesData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2} dataKey="value" stroke="none">
+                                    <BarChart data={metrics.rulesData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                                        <XAxis dataKey="name" tick={{fontSize: 10}} interval={0} angle={-45} textAnchor="end" height={60} />
+                                        <YAxis tick={{fontSize: 10}} />
+                                        <Tooltip 
+                                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} 
+                                            formatter={(value: any, name: any) => {
+                                                if (name === "pnl") return [new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(value as number), "PnL"];
+                                                return [value, "Frequency"];
+                                            }}
+                                            labelFormatter={(label, payload) => payload?.[0]?.payload?.fullName || label}
+                                        />
+                                        <Bar dataKey="pnl" name="pnl" radius={[4, 4, 0, 0]}>
                                             {metrics.rulesData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                                <Cell key={`cell-${index}`} fill={entry.pnl >= 0 ? '#10b981' : '#ef4444'} />
                                             ))}
-                                        </Pie>
-                                        <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                                        <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" className="text-sm font-medium fill-muted-foreground">
-                                            By Freq
-                                        </text>
-                                    </PieChart>
+                                        </Bar>
+                                    </BarChart>
                                 </ResponsiveContainer>
                             </div>
                             <div className="w-full pt-4 border-t border-zinc-100 dark:border-zinc-800/50 mt-4">

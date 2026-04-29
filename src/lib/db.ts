@@ -109,3 +109,46 @@ export async function addRule(userId: string, text: string): Promise<Rule> {
 export async function deleteRule(id: string, userId: string): Promise<void> {
     await db.collection("rules").doc(id).delete();
 }
+
+export interface MonthlyAnalysis {
+    id: string;
+    userId: string;
+    monthYear: string; // Format: "yyyy-MM"
+    analysis: string;
+    updatedAt: string;
+}
+
+export async function getMonthlyAnalyses(userId: string): Promise<MonthlyAnalysis[]> {
+    try {
+        const snapshot = await db.collection("monthly_analysis").where("userId", "==", userId).get();
+        const analyses = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as MonthlyAnalysis[];
+        
+        return analyses;
+    } catch (error) {
+        console.error('Firestore Error getMonthlyAnalyses:', error);
+        return [];
+    }
+}
+
+export async function saveMonthlyAnalysis(userId: string, monthYear: string, analysis: string): Promise<MonthlyAnalysis> {
+    const data = { userId, monthYear, analysis, updatedAt: new Date().toISOString() };
+    
+    // Check if exists
+    const snapshot = await db.collection("monthly_analysis")
+        .where("userId", "==", userId)
+        .where("monthYear", "==", monthYear)
+        .limit(1)
+        .get();
+        
+    if (!snapshot.empty) {
+        const docId = snapshot.docs[0].id;
+        await db.collection("monthly_analysis").doc(docId).update(data);
+        return { id: docId, ...data } as MonthlyAnalysis;
+    } else {
+        const docRef = await db.collection("monthly_analysis").add(data);
+        return { id: docRef.id, ...data } as MonthlyAnalysis;
+    }
+}

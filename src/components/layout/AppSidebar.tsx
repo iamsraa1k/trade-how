@@ -9,6 +9,7 @@ const navItems = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Trade Log", href: "/trades", icon: List },
   { name: "Rules", href: "/rules", icon: CheckSquare },
+  { name: "Monthly Analysis", href: "/monthly-analysis", icon: Calendar },
 ];
 
 export function AppSidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (val: boolean) => void }) {

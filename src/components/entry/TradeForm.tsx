@@ -97,10 +97,9 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
         })
     }
 
-    const handleLegInput = (index: number, e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        const { name, value } = e.target
+    const handleLegInput = (index: number, field: string, value: string) => {
         const newLegs = [...legs]
-        ;(newLegs[index] as any)[name] = value
+        ;(newLegs[index] as any)[field] = value
 
         setLegs(newLegs)
 
@@ -304,30 +303,30 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                                         <div className="grid grid-cols-2 md:grid-cols-5 md:col-span-5 gap-3 mt-2 md:mt-0">
                                             <div className="space-y-1.5 md:col-span-2">
                                                 <Label className="text-xs">Leg Symbol <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                                                <Input name="symbol" placeholder="e.g. 23500 CE" value={leg.symbol} onChange={(e) => handleLegInput(index, e)} className="h-9 text-sm w-full bg-background font-mono uppercase" />
+                                                <Input placeholder="e.g. 23500 CE" value={leg.symbol} onChange={(e) => handleLegInput(index, 'symbol', e.target.value)} className="h-9 text-sm w-full bg-background font-mono uppercase" />
                                             </div>
                                             <div className="space-y-1.5">
                                                 <Label className="text-xs">Action</Label>
-                                                <select name="type" value={leg.type} onChange={(e) => handleLegInput(index, e)} className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-2 text-sm">
+                                                <select value={leg.type} onChange={(e) => handleLegInput(index, 'type', e.target.value)} className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-2 text-sm">
                                                     <option value="buy">Buy</option>
                                                     <option value="sell">Sell</option>
                                                 </select>
                                             </div>
                                             <div className="space-y-1.5">
                                                 <Label className="text-xs">Qty / Lots</Label>
-                                                <Input type="number" name="quantity" value={leg.quantity} onChange={(e) => handleLegInput(index, e)} className="h-9 w-full text-sm bg-background" />
+                                                <Input type="number" value={leg.quantity} onChange={(e) => handleLegInput(index, 'quantity', e.target.value)} className="h-9 w-full text-sm bg-background" />
                                             </div>
                                             <div className="space-y-1.5">
                                                 <Label className="text-xs">Entry</Label>
-                                                <Input type="number" step="any" name="entry" value={leg.entry} onChange={(e) => handleLegInput(index, e)} className="h-9 w-full text-sm bg-background" />
+                                                <Input type="number" step="any" value={leg.entry} onChange={(e) => handleLegInput(index, 'entry', e.target.value)} className="h-9 w-full text-sm bg-background" />
                                             </div>
                                             <div className="space-y-1.5">
                                                 <Label className="text-xs">Exit</Label>
-                                                <Input type="number" step="any" name="exit" value={leg.exit} onChange={(e) => handleLegInput(index, e)} className="h-9 w-full text-sm bg-background" />
+                                                <Input type="number" step="any" value={leg.exit} onChange={(e) => handleLegInput(index, 'exit', e.target.value)} className="h-9 w-full text-sm bg-background" />
                                             </div>
                                             <div className="space-y-1.5">
                                                 <Label className="text-xs">Charges</Label>
-                                                <Input type="number" step="any" name="fees" value={leg.fees || ""} onChange={(e) => handleLegInput(index, e)} className="h-9 w-full text-sm bg-background" placeholder="0" />
+                                                <Input type="number" step="any" value={leg.fees || ""} onChange={(e) => handleLegInput(index, 'fees', e.target.value)} className="h-9 w-full text-sm bg-background" placeholder="0" />
                                             </div>
                                         </div>
                                     </div>

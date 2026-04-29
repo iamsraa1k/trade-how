@@ -1,6 +1,6 @@
 'use server'
 
-import { getTrades, saveTrade, updateTrade, deleteTrade, getRules, addRule, deleteRule } from '@/lib/db';
+import { getTrades, saveTrade, updateTrade, deleteTrade, getRules, addRule, deleteRule, getMonthlyAnalyses, saveMonthlyAnalysis } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -174,5 +174,22 @@ export async function deleteTradeAction(id: string) {
     } catch (error: any) {
         console.error("Failed to delete trade", error);
         return { success: false, error: "Failed to delete trade due to server error" };
+    }
+}
+
+export async function fetchMonthlyAnalyses() {
+    const userId = await getAuthenticatedUser();
+    return await getMonthlyAnalyses(userId);
+}
+
+export async function saveMonthlyAnalysisAction(monthYear: string, analysis: string) {
+    try {
+        const userId = await getAuthenticatedUser();
+        const saved = await saveMonthlyAnalysis(userId, monthYear, analysis);
+        revalidatePath('/monthly-analysis');
+        return { success: true, data: saved };
+    } catch (error: any) {
+        console.error("Failed to save monthly analysis", error);
+        return { success: false, error: "Failed to save monthly analysis" };
     }
 }
