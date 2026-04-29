@@ -27,15 +27,14 @@ const formatCompactNumber = (num: number) => {
     return sign + abs.toFixed(0);
 }
 
-export function CalendarView({ trades, rules }: { trades: Trade[], rules: Rule[] }) {
-    const [currentMonth, setCurrentMonth] = useState(new Date())
+export function CalendarView({ trades, rules, currentMonth, onMonthChange }: { trades: Trade[], rules: Rule[], currentMonth: Date, onMonthChange: (date: Date) => void }) {
     const [selectedDate, setSelectedDate] = useState<Date | null>(null)
     const [isDayModalOpen, setIsDayModalOpen] = useState(false)
     const [mobileActiveTradeId, setMobileActiveTradeId] = useState<string | null>(null)
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
-    const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1))
-    const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1))
+    const nextMonth = () => onMonthChange(addMonths(currentMonth, 1))
+    const prevMonth = () => onMonthChange(subMonths(currentMonth, 1))
 
     const daysInMonth = eachDayOfInterval({
         start: startOfMonth(currentMonth),

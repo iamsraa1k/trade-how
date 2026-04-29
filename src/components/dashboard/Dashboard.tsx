@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { CalendarView } from "@/components/calendar/CalendarView"
 
 export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] }) {
-    const currentMonth = new Date()
+    const [currentMonth, setCurrentMonth] = useState(new Date())
     const [customStartDate, setCustomStartDate] = useState<string>("")
     const [customEndDate, setCustomEndDate] = useState<string>("")
 
@@ -94,7 +94,7 @@ export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] })
             </div>
 
             <div className="w-full pb-2">
-                <CalendarView trades={trades} rules={rules} />
+                <CalendarView trades={trades} rules={rules} currentMonth={currentMonth} onMonthChange={setCurrentMonth} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
