@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Save, Calculator, Plus, Trash2 } from "lucide-react"
+import { Save, Calculator, Plus, Trash2, FileText, Star, ThumbsDown, Minus } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -19,6 +19,8 @@ import { Switch } from "@/components/ui/switch"
 import { addNewTrade, updateTradeAction } from "@/app/actions"
 import { useRouter } from "next/navigation"
 import type { Rule } from "@/lib/db"
+
+type TradeQuality = "flawless" | "acceptable" | "violation"
 
 export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialData?: any, id?: string }) {
     const router = useRouter()
@@ -38,6 +40,10 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
         date: initialData?.date || new Date().toISOString().split('T')[0]
     })
 
+    const [isPaper, setIsPaper] = React.useState<boolean>(!!initialData?.isPaper)
+    const [tradeQuality, setTradeQuality] = React.useState<TradeQuality>(initialData?.tradeQuality || "acceptable")
+    const [qualityManuallySet, setQualityManuallySet] = React.useState(false)
+
     const [isBasket, setIsBasket] = React.useState<boolean>(!!initialData?.isBasket)
     const [legs, setLegs] = React.useState(() => {
         if (initialData?.legs?.length > 0) {
@@ -54,6 +60,24 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
     })
 
     const [calculatedPnl, setCalculatedPnl] = React.useState<number | null>(null)
+
+    // Auto-detect trade quality based on rules checked (only if not manually overridden)
+    React.useEffect(() => {
+        if (isPaper || qualityManuallySet) return
+        
+        const checkedRules = formData.rules.length
+        const totalRules = rules.length
+        
+        if (totalRules === 0) return // No rules defined, don't auto-detect
+        
+        if (checkedRules === totalRules) {
+            setTradeQuality("flawless")
+        } else if (checkedRules === 0) {
+            setTradeQuality("violation")
+        } else {
+            setTradeQuality("acceptable")
+        }
+    }, [formData.rules, rules.length, isPaper, qualityManuallySet])
 
     const handleInput = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value, type } = e.target
@@ -164,6 +188,10 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
         setIsSubmitting(true)
         try {
             data.append("isBasket", isBasket.toString())
+            data.append("isPaper", isPaper.toString())
+            if (!isPaper) {
+                data.append("tradeQuality", tradeQuality)
+            }
             if (isBasket) {
                 // If basket, send the parsed legs as JSON
                 formatiBasketLegs(data)
@@ -208,14 +236,69 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
         if (!data.has("fees")) data.set("fees", "0")
     }
 
+    const qualityOptions: { value: TradeQuality; label: string; description: string; icon: React.ElementType; activeClasses: string; iconClasses: string }[] = [
+        {
+            value: "flawless",
+            label: "Flawless",
+            description: "All rules followed",
+            icon: Star,
+            activeClasses: "ring-2 ring-amber-400 bg-amber-50 border-amber-300 dark:bg-amber-950/30 dark:border-amber-700",
+            iconClasses: "text-amber-500 fill-amber-500"
+        },
+        {
+            value: "acceptable",
+            label: "Acceptable",
+            description: "Minor tweaks only",
+            icon: Minus,
+            activeClasses: "ring-2 ring-zinc-400 bg-zinc-50 border-zinc-300 dark:bg-zinc-800/50 dark:border-zinc-600",
+            iconClasses: "text-zinc-400"
+        },
+        {
+            value: "violation",
+            label: "Violation",
+            description: "Broke trading rules",
+            icon: ThumbsDown,
+            activeClasses: "ring-2 ring-red-400 bg-red-50 border-red-300 dark:bg-red-950/30 dark:border-red-700",
+            iconClasses: "text-red-500"
+        },
+    ]
+
     return (
-        <Card className="w-full shadow-xl border-zinc-200 dark:border-zinc-800 bg-card">
+        <Card className={`w-full shadow-xl border-zinc-200 dark:border-zinc-800 bg-card transition-all duration-300 ${isPaper ? 'border-teal-300 dark:border-teal-800 ring-1 ring-teal-200/50 dark:ring-teal-900/50' : ''}`}>
             <CardHeader className="border-b border-border/50 pb-6">
-                <CardTitle className="text-2xl font-bold flex items-center gap-2">
-                    {id ? "Edit Trade" : "Trade Entry"}
-                </CardTitle>
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                    <CardTitle className="text-2xl font-bold flex items-center gap-2">
+                        {isPaper && <FileText className="h-6 w-6 text-teal-500" />}
+                        {id ? "Edit Trade" : "Trade Entry"}
+                        {isPaper && <span className="text-sm font-semibold bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-400 px-2.5 py-0.5 rounded-full ml-1">PAPER</span>}
+                    </CardTitle>
+                    
+                    {/* Paper Trade Toggle */}
+                    <div className={`flex items-center space-x-2.5 p-2 px-3.5 rounded-xl border shadow-sm transition-all duration-300 ${isPaper ? 'bg-teal-50 border-teal-200 dark:bg-teal-950/30 dark:border-teal-800' : 'bg-muted/30 border-border'}`}>
+                        <FileText className={`h-4 w-4 transition-colors ${isPaper ? 'text-teal-500' : 'text-muted-foreground'}`} />
+                        <Label htmlFor="paper-mode" className={`text-sm cursor-pointer whitespace-nowrap font-medium transition-colors ${isPaper ? 'text-teal-700 dark:text-teal-400' : 'text-foreground'}`}>
+                            Paper Trade
+                        </Label>
+                        <Switch 
+                            id="paper-mode" 
+                            checked={isPaper} 
+                            onCheckedChange={(checked: boolean) => {
+                                setIsPaper(checked)
+                                if (checked) {
+                                    setTradeQuality("acceptable")
+                                    setQualityManuallySet(false)
+                                }
+                            }}
+                        />
+                    </div>
+                </div>
                 <CardDescription>
-                    {id ? "Modify your logged position." : "Record your execution details. Multi-leg basket orders supported."}
+                    {isPaper 
+                        ? "Record a simulated paper trade for practice and backtesting." 
+                        : id 
+                            ? "Modify your logged position." 
+                            : "Record your execution details. Multi-leg basket orders supported."
+                    }
                 </CardDescription>
             </CardHeader>
             <CardContent className="pt-6">
@@ -380,7 +463,9 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                         </h3>
                         <div className="bg-muted/20 p-4 rounded-xl border border-border/50 flex flex-col md:flex-row gap-6 items-center">
                             <div className="flex-1 w-full relative">
-                                <Label htmlFor="pnl" className="text-sm border-b-0 mb-2 block font-medium">Realized P/L</Label>
+                                <Label htmlFor="pnl" className="text-sm border-b-0 mb-2 block font-medium">
+                                    {isPaper ? "Simulated P/L" : "Realized P/L"}
+                                </Label>
                                 <div className="relative shadow-sm rounded-md">
                                     <Calculator className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                                     <Input
@@ -455,13 +540,66 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                         </div>
                     </div>
 
+                    {/* Section 5: Trade Quality — Only for Regular Trades */}
+                    {!isPaper && (
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2 text-primary">
+                                    5. Trade Quality
+                                </h3>
+                                {qualityManuallySet && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setQualityManuallySet(false)}
+                                        className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
+                                    >
+                                        Reset to auto-detect
+                                    </button>
+                                )}
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                {qualityOptions.map((opt) => {
+                                    const isSelected = tradeQuality === opt.value
+                                    const IconComp = opt.icon
+                                    return (
+                                        <button
+                                            key={opt.value}
+                                            type="button"
+                                            onClick={() => {
+                                                setTradeQuality(opt.value)
+                                                setQualityManuallySet(true)
+                                            }}
+                                            className={`relative flex flex-col items-center gap-2 p-4 sm:p-5 rounded-xl border-2 transition-all duration-200 cursor-pointer hover:shadow-md ${
+                                                isSelected
+                                                    ? opt.activeClasses
+                                                    : 'border-border bg-card hover:border-muted-foreground/30'
+                                            }`}
+                                        >
+                                            <IconComp className={`h-6 w-6 sm:h-7 sm:w-7 transition-colors ${isSelected ? opt.iconClasses : 'text-muted-foreground/50'}`} />
+                                            <span className={`text-sm font-bold transition-colors ${isSelected ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                                {opt.label}
+                                            </span>
+                                            <span className="text-[10px] sm:text-xs text-muted-foreground text-center leading-tight">
+                                                {opt.description}
+                                            </span>
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="flex justify-end pt-2">
-                        <Button type="submit" disabled={isSubmitting} size="lg" className="w-full md:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 transition-all font-bold px-10 py-6 text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 rounded-xl">
+                        <Button type="submit" disabled={isSubmitting} size="lg" className={`w-full md:w-auto transition-all font-bold px-10 py-6 text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 rounded-xl ${
+                            isPaper
+                                ? 'bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700'
+                                : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700'
+                        }`}>
                             {isSubmitting ? (
                                 <>Saving...</>
                             ) : (
                                 <>
-                                    <Save className="mr-2 h-5 w-5" /> {id ? "Update Trade" : "Save Trade"}
+                                    <Save className="mr-2 h-5 w-5" /> {id ? "Update Trade" : isPaper ? "Save Paper Trade" : "Save Trade"}
                                 </>
                             )}
                         </Button>

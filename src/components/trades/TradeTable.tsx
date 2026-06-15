@@ -4,24 +4,29 @@ import React, { useState, useMemo, useEffect, useRef } from "react"
 import type { Trade, Rule, MonthlyAnalysis } from "@/lib/db"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Download, Trash2, Search, Target, FileSpreadsheet, Calendar as CalendarIcon } from "lucide-react"
+import { Download, Trash2, Search, Target, FileSpreadsheet, Calendar as CalendarIcon, ThumbsDown, FileText, Star } from "lucide-react"
 import { format, parseISO } from "date-fns"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { deleteTradeAction } from "@/app/actions"
 import { toast } from "sonner"
+import { useTradeFilter } from "@/components/TradeFilterContext"
 
 export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Trade[], rules: Rule[], monthlyAnalyses?: MonthlyAnalysis[] }) {
+    const { filterTrades } = useTradeFilter()
     const [searchTerm, setSearchTerm] = useState("")
     const [startDate, setStartDate] = useState<string>("")
     const [endDate, setEndDate] = useState<string>("")
+
+    // Apply global trade filter before local search/date filters
+    const globallyFilteredTrades = useMemo(() => filterTrades(trades), [trades, filterTrades])
     
     // Lazy loading state
     const [visibleDays, setVisibleDays] = useState(10)
     const observerTarget = useRef<HTMLDivElement>(null)
 
     const filteredTrades = useMemo(() => {
-        return trades.filter(t => {
+        return globallyFilteredTrades.filter(t => {
             const matchesSearch = t.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 t.analysis?.toLowerCase().includes(searchTerm.toLowerCase());
             
@@ -31,7 +36,7 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Tr
 
             return matchesSearch && matchesDate;
         });
-    }, [trades, searchTerm, startDate, endDate]);
+    }, [globallyFilteredTrades, searchTerm, startDate, endDate]);
 
     // Group by Date
     const groupedByDate = useMemo(() => {
@@ -72,7 +77,7 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Tr
             return;
         }
 
-        let csvContent = "Date,MainSymbol,Type,LegNo,LegSymbol,LegType,Entry,Exit,Quantity,Fees,TotalPnL,Analysis,MonthlyAnalysis\n";
+        let csvContent = "Date,MainSymbol,Type,LegNo,LegSymbol,LegType,Entry,Exit,Quantity,Fees,TotalPnL,Analysis,MonthlyAnalysis,TradeMode,TradeQuality\n";
         
         // Group filtered trades by month for MonthlyAnalysis column
         filteredTrades.forEach(t => {
@@ -80,14 +85,16 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Tr
             const monthYear = format(new Date(t.date), "yyyy-MM");
             const monthlyReview = monthlyAnalyses.find(ma => ma.monthYear === monthYear);
             const safeMonthlyAnalysis = monthlyReview ? `"${monthlyReview.analysis.replace(/"/g, '""')}"` : `""`;
+            const tradeMode = t.isPaper ? "Paper" : "Regular";
+            const tradeQuality = t.isPaper ? "N/A" : (t.tradeQuality ? t.tradeQuality.charAt(0).toUpperCase() + t.tradeQuality.slice(1) : "Acceptable");
 
             if (t.isBasket && t.legs) {
-                csvContent += `${t.date},"${t.symbol}",BASKET,-,-,-,-,-,-,${t.fees},${t.pnl},${safeAnalysis},${safeMonthlyAnalysis}\n`;
+                csvContent += `${t.date},"${t.symbol}",BASKET,-,-,-,-,-,-,${t.fees},${t.pnl},${safeAnalysis},${safeMonthlyAnalysis},${tradeMode},${tradeQuality}\n`;
                 t.legs.forEach((l, i) => {
-                    csvContent += `${t.date},"${t.symbol}",BASKET,${i+1},"${l.symbol || '-'}",${l.type.toUpperCase()},${l.entryPrice},${l.exitPrice},${l.quantity},${l.fees},-,-\n`;
+                    csvContent += `${t.date},"${t.symbol}",BASKET,${i+1},"${l.symbol || '-'}",${l.type.toUpperCase()},${l.entryPrice},${l.exitPrice},${l.quantity},${l.fees},-,-,,\n`;
                 });
             } else {
-                csvContent += `${t.date},"${t.symbol}",${t.type.toUpperCase()},-,-,-,${t.entryPrice},${t.exitPrice},${t.quantity},${t.fees},${t.pnl},${safeAnalysis},${safeMonthlyAnalysis}\n`;
+                csvContent += `${t.date},"${t.symbol}",${t.type.toUpperCase()},-,-,-,${t.entryPrice},${t.exitPrice},${t.quantity},${t.fees},${t.pnl},${safeAnalysis},${safeMonthlyAnalysis},${tradeMode},${tradeQuality}\n`;
             }
         });
 
@@ -153,12 +160,14 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Tr
                     }
 
                     const isProfit = trade.pnl >= 0;
+                    const modeLabel = trade.isPaper ? "[PAPER] " : "";
+                    const qualityLabel = trade.isPaper ? "" : (trade.tradeQuality === "flawless" ? " ⭐ FLAWLESS" : trade.tradeQuality === "violation" ? " ⚠ VIOLATION" : "");
                     
                     doc.setFont("helvetica", "bold");
                     doc.setTextColor(0);
                     doc.setFontSize(10);
                     
-                    doc.text(`${format(new Date(trade.date), "dd MMM")}  |  ${trade.symbol.toUpperCase()}  |  ${trade.isBasket ? "BASKET" : trade.type.toUpperCase()}`, 14, currentY);
+                    doc.text(`${modeLabel}${format(new Date(trade.date), "dd MMM")}  |  ${trade.symbol.toUpperCase()}  |  ${trade.isBasket ? "BASKET" : trade.type.toUpperCase()}${qualityLabel}`, 14, currentY);
                     
                     doc.setTextColor(isProfit ? 16 : 239, isProfit ? 185 : 68, isProfit ? 129 : 68);
                     doc.text(`PnL: ${trade.pnl > 0 ? "+" : ""}${trade.pnl.toFixed(2)}`, 160, currentY);
@@ -292,17 +301,37 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Tr
 
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {dayTrades.map(trade => (
-                                    <Card key={trade.id} className="overflow-hidden hover:shadow-lg transition-shadow border-border/50">
+                                    <Card key={trade.id} className={`overflow-hidden hover:shadow-lg transition-shadow ${trade.isPaper ? 'border-dashed border-teal-300 dark:border-teal-800' : 'border-border/50'}`}>
                                         <CardContent className="p-0">
-                                            <div className={`h-2 w-full ${trade.pnl > 0 ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                                            <div className={`h-2 w-full ${trade.isPaper ? (trade.pnl > 0 ? 'bg-teal-500' : 'bg-cyan-600') : (trade.pnl > 0 ? 'bg-emerald-500' : 'bg-red-500')}`} />
                                             <div className="p-5 flex flex-col h-full min-h-[300px]">
                                                 <div className="flex justify-between items-start mb-4">
                                                     <div>
                                                         <h3 className="font-bold text-lg">{trade.symbol}</h3>
                                                         <p className="text-xs text-muted-foreground">{format(new Date(trade.date), "PPP")}</p>
                                                     </div>
-                                                    <div className={`px-2.5 py-1 rounded-full text-xs font-semibold ${trade.isBasket ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' : trade.type === 'buy' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
-                                                        {trade.isBasket ? "BASKET" : trade.type.toUpperCase()}
+                                                    <div className="flex items-center gap-1.5">
+                                                        {trade.isPaper && (
+                                                            <div className="px-2.5 py-1 rounded-full text-xs font-semibold bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 flex items-center gap-1">
+                                                                <FileText className="h-3 w-3 text-teal-500" />
+                                                                PAPER
+                                                            </div>
+                                                        )}
+                                                        {!trade.isPaper && trade.tradeQuality === 'flawless' && (
+                                                            <div className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 flex items-center gap-1">
+                                                                <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
+                                                                ⭐ FLAWLESS
+                                                            </div>
+                                                        )}
+                                                        {!trade.isPaper && trade.tradeQuality === 'violation' && (
+                                                            <div className="px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 flex items-center gap-1">
+                                                                <ThumbsDown className="h-3 w-3" />
+                                                                VIOLATION
+                                                            </div>
+                                                        )}
+                                                        <div className={`px-2.5 py-1 rounded-full text-xs font-semibold ${trade.isBasket ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' : trade.type === 'buy' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                                                            {trade.isBasket ? "BASKET" : trade.type.toUpperCase()}
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 

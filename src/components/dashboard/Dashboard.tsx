@@ -9,8 +9,13 @@ import { startOfMonth, endOfMonth, format } from "date-fns"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { CalendarView } from "@/components/calendar/CalendarView"
+import { useTradeFilter } from "@/components/TradeFilterContext"
+import { FileText } from "lucide-react"
 
 export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] }) {
+    const { tradeMode, filterTrades } = useTradeFilter()
+    const visibleTrades = filterTrades(trades)
+
     const [currentMonth, setCurrentMonth] = useState(new Date())
     const [customStartDate, setCustomStartDate] = useState<string>("")
     const [customEndDate, setCustomEndDate] = useState<string>("")
@@ -18,22 +23,22 @@ export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] })
     const filteredTrades = useMemo(() => {
         const start = startOfMonth(currentMonth)
         const end = endOfMonth(currentMonth)
-        return trades.filter(t => {
+        return visibleTrades.filter(t => {
             const tradeDate = new Date(t.date)
             return tradeDate >= start && tradeDate <= end
         })
-    }, [trades, currentMonth])
+    }, [visibleTrades, currentMonth])
 
     const customRangePnl = useMemo(() => {
         if (!customStartDate || !customEndDate) return null;
         if (customStartDate > customEndDate) return null;
 
-        const relevantTrades = trades.filter(t => {
+        const relevantTrades = visibleTrades.filter(t => {
             return t.date >= customStartDate && t.date <= customEndDate;
         });
 
         return relevantTrades.reduce((acc, t) => acc + t.pnl, 0);
-    }, [trades, customStartDate, customEndDate])
+    }, [visibleTrades, customStartDate, customEndDate])
 
     const metrics = useMemo(() => {
         const totalTrades = filteredTrades.length
@@ -85,7 +90,13 @@ export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] })
                 <div className="flex-1 flex flex-col sm:flex-row justify-between items-center p-6 sm:p-8 rounded-2xl shadow-lg border relative overflow-hidden bg-card">
                     <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-purple-500/5 to-transparent dark:from-indigo-500/10 dark:via-purple-500/10 z-0"></div>
                     <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-6 w-full sm:w-auto text-center sm:text-left z-10">
-                        <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">This Month&#39;s Realized P/L</span>
+                        <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                            {tradeMode === 'paper' ? (
+                                <>This Month&#39;s Simulated P/L <FileText className="w-3.5 h-3.5 text-teal-500" /></>
+                            ) : (
+                                <>This Month&#39;s Realized P/L</>
+                            )}
+                        </span>
                         <span className={`text-4xl sm:text-5xl font-extrabold tracking-tighter drop-shadow-sm ${totalMonthlyPnl >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                             {totalMonthlyPnl >= 0 ? '+' : ''}{totalMonthlyPnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                         </span>
@@ -94,7 +105,7 @@ export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] })
             </div>
 
             <div className="w-full pb-2">
-                <CalendarView trades={trades} rules={rules} currentMonth={currentMonth} onMonthChange={setCurrentMonth} />
+                <CalendarView trades={visibleTrades} rules={rules} currentMonth={currentMonth} onMonthChange={setCurrentMonth} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">

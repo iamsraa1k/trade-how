@@ -21,7 +21,9 @@ const TradeSchema = z.object({
     rules: z.array(z.string()).optional().default([]),
     attachment: z.any().optional(),
     isBasket: z.boolean().optional().default(false),
-    legs: z.any().optional()
+    legs: z.any().optional(),
+    isPaper: z.boolean().optional().default(false),
+    tradeQuality: z.enum(["flawless", "acceptable", "violation"]).optional()
 });
 
 // Helper to get authenticated user or throw/redirect
@@ -76,6 +78,7 @@ export async function addNewTrade(formData: FormData) {
         const formObject: Record<string, any> = Object.fromEntries(formData.entries());
         formObject.rules = formData.getAll('rules');
         formObject.isBasket = formObject.isBasket === "true";
+        formObject.isPaper = formObject.isPaper === "true";
 
         let parsedLegs = [];
         if (formObject.isBasket && formObject.legsData) {
@@ -104,7 +107,9 @@ export async function addNewTrade(formData: FormData) {
             rules: data.rules,
             attachment: (data.attachment as File)?.name || "",
             isBasket: data.isBasket,
-            legs: data.legs
+            legs: data.legs,
+            isPaper: data.isPaper,
+            tradeQuality: data.isPaper ? undefined : data.tradeQuality,
         };
 
         await saveTrade(rawTrade, userId);
@@ -124,6 +129,7 @@ export async function updateTradeAction(id: string, formData: FormData) {
         const formObject: Record<string, any> = Object.fromEntries(formData.entries());
         formObject.rules = formData.getAll('rules');
         formObject.isBasket = formObject.isBasket === "true";
+        formObject.isPaper = formObject.isPaper === "true";
 
         let parsedLegs = [];
         if (formObject.isBasket && formObject.legsData) {
@@ -153,7 +159,9 @@ export async function updateTradeAction(id: string, formData: FormData) {
             rules: data.rules,
             attachment: (data.attachment as File)?.name || "",
             isBasket: data.isBasket,
-            legs: data.legs
+            legs: data.legs,
+            isPaper: data.isPaper,
+            tradeQuality: data.isPaper ? undefined : data.tradeQuality,
         };
 
         await updateTrade(id, rawTrade, userId);

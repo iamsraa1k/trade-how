@@ -2,9 +2,10 @@
 
 import React, { useState, useMemo } from "react"
 import type { Trade, Rule, MonthlyAnalysis } from "@/lib/db"
+import { useTradeFilter } from "@/components/TradeFilterContext"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight, PenTool, Eye, AlertCircle } from "lucide-react"
+import { ChevronLeft, ChevronRight, PenTool, Eye, AlertCircle, FileText, Star, ThumbsDown } from "lucide-react"
 import { format, parseISO, addYears, subYears, eachMonthOfInterval, startOfYear, endOfYear, isSameMonth } from "date-fns"
 import {
     Dialog,
@@ -19,6 +20,9 @@ import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 
 export function MonthlyView({ trades, rules, monthlyAnalyses }: { trades: Trade[], rules: Rule[], monthlyAnalyses: MonthlyAnalysis[] }) {
+    const { tradeMode, filterTrades } = useTradeFilter()
+    const visibleTrades = filterTrades(trades)
+
     const [currentYearDate, setCurrentYearDate] = useState(new Date())
     const [selectedMonthStr, setSelectedMonthStr] = useState<string | null>(null)
     const [isModalOpen, setIsModalOpen] = useState(false)
@@ -60,8 +64,8 @@ export function MonthlyView({ trades, rules, monthlyAnalyses }: { trades: Trade[
 
     const selectedMonthTrades = useMemo(() => {
         if (!selectedMonthStr) return [];
-        return trades.filter(t => t.date.startsWith(selectedMonthStr));
-    }, [trades, selectedMonthStr]);
+        return visibleTrades.filter(t => t.date.startsWith(selectedMonthStr));
+    }, [visibleTrades, selectedMonthStr]);
 
     const selectedMonthPnl = useMemo(() => {
         return selectedMonthTrades.reduce((acc, t) => acc + t.pnl, 0);
@@ -89,7 +93,7 @@ export function MonthlyView({ trades, rules, monthlyAnalyses }: { trades: Trade[
                         {monthsInYear.map((monthDate) => {
                             const monthStr = format(monthDate, "yyyy-MM");
                             const hasAnalysis = monthlyAnalyses.some(ma => ma.monthYear === monthStr && ma.analysis.trim().length > 0);
-                            const monthTrades = trades.filter(t => t.date.startsWith(monthStr));
+                            const monthTrades = visibleTrades.filter(t => t.date.startsWith(monthStr));
                             const monthPnl = monthTrades.reduce((acc, t) => acc + t.pnl, 0);
                             const tradeCount = monthTrades.length;
                             const isCurrentMonth = isSameMonth(monthDate, new Date());
@@ -120,7 +124,10 @@ export function MonthlyView({ trades, rules, monthlyAnalyses }: { trades: Trade[
                                     <div className="mt-auto">
                                         {tradeCount > 0 ? (
                                             <div>
-                                                <p className="text-xs text-muted-foreground font-medium mb-1">{tradeCount} Trades</p>
+                                                <p className="text-xs text-muted-foreground font-medium mb-1 flex items-center gap-1">
+                                                    {tradeMode === 'paper' && <FileText className="w-3 h-3 text-teal-500" />}
+                                                    {tradeCount} Trades
+                                                </p>
                                                 <p className={`text-xl font-bold tracking-tight ${monthPnl > 0 ? 'text-emerald-600 dark:text-emerald-400' : monthPnl < 0 ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>
                                                     {monthPnl > 0 ? '+' : ''}{monthPnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })}
                                                 </p>
@@ -190,7 +197,17 @@ export function MonthlyView({ trades, rules, monthlyAnalyses }: { trades: Trade[
                                                         <div className="flex justify-between items-start">
                                                             <div>
                                                                 <div className="font-bold flex items-center gap-2 text-sm">
-                                                                    {trade.symbol} 
+                                                                    {trade.symbol}
+                                                                    {trade.isPaper ? (
+                                                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400 px-1.5 py-0.5 rounded-full border border-teal-200 dark:border-teal-800/50">
+                                                                            <FileText className="w-3 h-3" /> PAPER
+                                                                        </span>
+                                                                    ) : (
+                                                                        <>
+                                                                            {trade.tradeQuality === 'flawless' && <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />}
+                                                                            {trade.tradeQuality === 'violation' && <ThumbsDown className="w-3.5 h-3.5 text-red-500" />}
+                                                                        </>
+                                                                    )}
                                                                     <span className="text-[10px] text-muted-foreground">{format(new Date(trade.date), "MMM d")}</span>
                                                                 </div>
                                                                 <div className="text-xs text-muted-foreground mt-0.5">
