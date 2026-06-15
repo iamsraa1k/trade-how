@@ -18,7 +18,7 @@ export interface Trade {
     isBasket?: boolean;
     legs?: { type: "buy" | "sell", entryPrice: number, exitPrice: number, quantity: number, fees: number, symbol?: string }[];
     isPaper?: boolean;
-    tradeQuality?: "flawless" | "acceptable" | "violation";
+    tradeQuality?: "flawless" | "acceptable" | "violation" | null;
 }
 
 export interface Rule {

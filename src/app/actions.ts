@@ -109,7 +109,7 @@ export async function addNewTrade(formData: FormData) {
             isBasket: data.isBasket,
             legs: data.legs,
             isPaper: data.isPaper,
-            tradeQuality: data.isPaper ? undefined : data.tradeQuality,
+            tradeQuality: data.isPaper ? null : (data.tradeQuality || null),
         };
 
         await saveTrade(rawTrade, userId);
@@ -161,7 +161,7 @@ export async function updateTradeAction(id: string, formData: FormData) {
             isBasket: data.isBasket,
             legs: data.legs,
             isPaper: data.isPaper,
-            tradeQuality: data.isPaper ? undefined : data.tradeQuality,
+            tradeQuality: data.isPaper ? null : (data.tradeQuality || null),
         };
 
         await updateTrade(id, rawTrade, userId);
