@@ -1,14 +1,18 @@
 import "./globals.css";
-import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeProvider } from "@/shared/components/theme-provider";
 import { cn } from "@/lib/utils";
-import { Providers } from "@/components/Providers";
-import { Toaster } from "@/components/ui/sonner";
-import { MainLayout } from "@/components/layout/MainLayout";
-import { SplashScreen } from "@/components/ui/SplashScreen";
+import { Providers } from "@/shared/components/Providers";
+import { Toaster } from "@/shared/components/ui/sonner";
+import { MainLayout } from "@/shared/components/layout/MainLayout";
+import { SplashScreen } from "@/shared/components/ui/SplashScreen";
+
+import { Inter } from "next/font/google";
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata = {
-  title: "TradeHow",
-  description: "Your personal trading journal assistant",
+  title: "TradeHow | Professional Trading Journal",
+  description: "Enterprise-grade personal trading journal assistant",
 };
 
 export default function RootLayout({
@@ -20,7 +24,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body
         className={cn(
-          "min-h-screen bg-background font-sans antialiased"
+          "min-h-screen bg-background font-sans antialiased",
+          inter.variable,
+          "bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-50/20 via-background to-background dark:from-indigo-950/20 dark:via-background dark:to-background"
         )}
       >
         <ThemeProvider
