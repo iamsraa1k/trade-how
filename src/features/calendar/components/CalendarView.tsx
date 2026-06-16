@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useMemo } from "react"
 import type { Trade, Rule } from "@/lib/db"
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card"
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from "date-fns"
@@ -46,17 +46,26 @@ export function CalendarView({ trades: rawTrades, rules, currentMonth, onMonthCh
     })
     const startDay = getDay(startOfMonth(currentMonth))
 
+    const tradesByDate = useMemo(() => {
+        const map: Record<string, Trade[]> = {}
+        trades.forEach(t => {
+            if (!map[t.date]) map[t.date] = []
+            map[t.date].push(t)
+        })
+        return map
+    }, [trades])
+
     const getPnlForDay = (date: Date) => {
         const dateStr = format(date, "yyyy-MM-dd")
-        const tradesForDay = trades.filter(t => t.date === dateStr)
+        const tradesForDay = tradesByDate[dateStr] || []
         if (tradesForDay.length === 0) return null
         return tradesForDay.reduce((acc, t) => acc + t.pnl, 0)
     }
 
     const handleDayClick = (date: Date) => {
         const dateStr = format(date, "yyyy-MM-dd")
-        const hasTrades = trades.some(t => t.date === dateStr)
-        if (hasTrades) {
+        const tradesForDay = tradesByDate[dateStr] || []
+        if (tradesForDay.length > 0) {
             setSelectedDate(date)
             setMobileActiveTradeId(null)
             setDeleteConfirmId(null)
@@ -114,7 +123,7 @@ export function CalendarView({ trades: rawTrades, rules, currentMonth, onMonthCh
                             const pnl = getPnlForDay(day)
                             const isPositive = pnl !== null && pnl > 0
 
-                            const tradesForThatDay = trades.filter(t => t.date === format(day, "yyyy-MM-dd"))
+                            const tradesForThatDay = tradesByDate[format(day, "yyyy-MM-dd")] || []
                             const allFlawless = tradesForThatDay.length > 0 && tradesForThatDay.every(t =>
                                 t.tradeQuality === 'flawless' || (rules.length > 0 && rules.every(r => (t.rules || []).includes(r.text)))
                             )
@@ -152,7 +161,7 @@ export function CalendarView({ trades: rawTrades, rules, currentMonth, onMonthCh
                                     transition={{ duration: 0.2, delay: i * 0.01 }}
                                     onClick={() => handleDayClick(day)}
                                     className={`
-                                min-h-[60px] sm:min-h-[100px] flex flex-col p-1 sm:p-2.5 border rounded-lg sm:rounded-xl relative transition-all cursor-pointer group hover:shadow-xl hover:-translate-y-0.5
+                                        min-h-[50px] sm:min-h-[100px] flex flex-col p-1 sm:p-2.5 border rounded-lg sm:rounded-xl relative transition-all cursor-pointer group hover:shadow-xl hover:-translate-y-0.5
                                 ${cellBgClass}
                             `}
                                 >
@@ -162,7 +171,7 @@ export function CalendarView({ trades: rawTrades, rules, currentMonth, onMonthCh
                                         </span>
                                         {/* Quality and paper trade icons */}
                                         {tradesForThatDay.length > 0 && (
-                                            <div className="flex flex-col items-center gap-0.5">
+                                            <div className="flex flex-row items-center gap-0.5 sm:gap-1">
                                                 {allFlawless && (
                                                     <Star className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-500 fill-yellow-500 drop-shadow-sm" />
                                                 )}

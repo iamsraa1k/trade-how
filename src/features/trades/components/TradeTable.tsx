@@ -310,7 +310,7 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Tr
                                                         <h3 className="font-bold text-lg">{trade.symbol}</h3>
                                                         <p className="text-xs text-muted-foreground">{format(new Date(trade.date), "PPP")}</p>
                                                     </div>
-                                                    <div className="flex items-center gap-1.5">
+                                                    <div className="flex flex-wrap items-center gap-1.5 justify-end">
                                                         {trade.isPaper && (
                                                             <div className="px-2.5 py-1 rounded-full text-xs font-semibold bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 flex items-center gap-1">
                                                                 <FileText className="h-3 w-3 text-teal-500" />
