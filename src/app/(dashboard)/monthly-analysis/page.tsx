@@ -1,19 +1,25 @@
+"use client"
+
 import { MonthlyView } from "@/features/analytics/components/MonthlyView";
-import { getTrades, getRules, getMonthlyAnalyses } from "@/lib/db";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { useData } from "@/shared/context/DataContext";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
-export default async function MonthlyAnalysisPage() {
-  const session = await getServerSession(authOptions);
+export default function MonthlyAnalysisPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const { trades, rules, monthlyAnalyses: analyses } = useData();
 
-  if (!session || !session.user?.email) {
-    redirect("/login");
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login");
+    }
+  }, [status, router]);
+
+  if (status === "loading") {
+    return null;
   }
-
-  const trades = await getTrades(session.user.email);
-  const rules = await getRules(session.user.email);
-  const analyses = await getMonthlyAnalyses(session.user.email);
 
   return (
     <div className="page-container">

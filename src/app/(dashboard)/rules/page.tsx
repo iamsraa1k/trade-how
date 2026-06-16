@@ -1,17 +1,25 @@
+"use client"
+
 import { RulesManager } from "@/features/rules/components/RulesManager";
-import { getRules } from "@/lib/db";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { useData } from "@/shared/context/DataContext";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
-export default async function RulesPage() {
-  const session = await getServerSession(authOptions);
+export default function RulesPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const { rules } = useData();
 
-  if (!session || !session.user?.email) {
-    redirect("/login");
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/login");
+    }
+  }, [status, router]);
+
+  if (status === "loading") {
+    return null;
   }
-
-  const rules = await getRules(session.user.email);
 
   return (
     <div className="page-container max-w-4xl">

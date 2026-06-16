@@ -165,21 +165,21 @@ export function CalendarView({ trades: rawTrades, rules, currentMonth, onMonthCh
                                 ${cellBgClass}
                             `}
                                 >
-                                    <div className="flex justify-between items-start">
-                                        <span className={`text-[10px] sm:text-sm font-bold pl-0.5 ${pnl !== null ? (allPaper ? (isPositive ? 'text-teal-700 dark:text-teal-300' : 'text-rose-700 dark:text-rose-300') : isPositive ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300') : 'text-zinc-600 dark:text-zinc-400 group-hover:text-foreground'}`}>
+                                    <div className="flex justify-between items-start w-full">
+                                        <span className={`text-[10px] sm:text-sm font-bold pl-0.5 leading-none ${pnl !== null ? (allPaper ? (isPositive ? 'text-teal-700 dark:text-teal-300' : 'text-rose-700 dark:text-rose-300') : isPositive ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300') : 'text-zinc-600 dark:text-zinc-400 group-hover:text-foreground'}`}>
                                             {format(day, 'd')}
                                         </span>
                                         {/* Quality and paper trade icons */}
                                         {tradesForThatDay.length > 0 && (
-                                            <div className="flex flex-row items-center gap-0.5 sm:gap-1">
+                                            <div className="flex flex-wrap justify-end items-center gap-0.5 sm:gap-1 max-w-[60%]">
                                                 {allFlawless && (
-                                                    <Star className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-500 fill-yellow-500 drop-shadow-sm" />
+                                                    <Star className="h-[10px] w-[10px] sm:h-4 sm:w-4 text-yellow-500 fill-yellow-500 drop-shadow-sm" />
                                                 )}
                                                 {anyViolation && (
-                                                    <ThumbsDown className="h-3 w-3 sm:h-4 sm:w-4 text-red-500 drop-shadow-sm" />
+                                                    <ThumbsDown className="h-[10px] w-[10px] sm:h-4 sm:w-4 text-red-500 drop-shadow-sm" />
                                                 )}
                                                 {hasPaperTrades && (
-                                                    <FileText className="h-3 w-3 sm:h-4 sm:w-4 text-teal-500 drop-shadow-sm" />
+                                                    <FileText className="h-[10px] w-[10px] sm:h-4 sm:w-4 text-teal-500 drop-shadow-sm" />
                                                 )}
                                             </div>
                                         )}

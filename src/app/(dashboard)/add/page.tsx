@@ -1,21 +1,29 @@
+"use client"
+
 import { TradeForm } from "@/features/trades/components/TradeForm";
 import { ModeToggle } from "@/shared/components/ui/mode-toggle";
 import { Button } from "@/shared/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { getRules } from "@/lib/db";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import { useData } from "@/shared/context/DataContext";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
-export default async function AddTradePage() {
-    const session = await getServerSession(authOptions);
+export default function AddTradePage() {
+    const { data: session, status } = useSession();
+    const router = useRouter();
+    const { rules } = useData();
 
-    if (!session || !session.user?.email) {
-        redirect("/login");
+    useEffect(() => {
+        if (status === "unauthenticated") {
+            router.push("/login");
+        }
+    }, [status, router]);
+
+    if (status === "loading") {
+        return null;
     }
-
-    const rules = await getRules(session.user.email);
 
     return (
         <div className="page-container max-w-3xl">

@@ -8,6 +8,11 @@ import { SplashScreen } from "@/shared/components/ui/SplashScreen";
 import NextTopLoader from 'nextjs-toploader';
 
 import { Inter } from "next/font/google";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
+import { getTrades, getRules, getMonthlyAnalyses } from "@/lib/db";
+import type { Trade, Rule, MonthlyAnalysis } from "@/lib/db";
+import { DataProvider } from "@/shared/context/DataContext";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -16,11 +21,25 @@ export const metadata = {
   description: "Enterprise-grade personal trading journal assistant",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await getServerSession(authOptions);
+  
+  let trades: Trade[] = [];
+  let rules: Rule[] = [];
+  let analyses: MonthlyAnalysis[] = [];
+  
+  if (session?.user?.email) {
+      [trades, rules, analyses] = await Promise.all([
+          getTrades(session.user.email),
+          getRules(session.user.email),
+          getMonthlyAnalyses(session.user.email)
+      ]);
+  }
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body
@@ -48,12 +67,14 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <Providers>
-            <SplashScreen>
-              <MainLayout>
-                {children}
-              </MainLayout>
-            </SplashScreen>
-            <Toaster />
+            <DataProvider initialTrades={trades} initialRules={rules} initialMonthlyAnalyses={analyses}>
+              <SplashScreen>
+                <MainLayout>
+                  {children}
+                </MainLayout>
+              </SplashScreen>
+              <Toaster />
+            </DataProvider>
           </Providers>
         </ThemeProvider>
       </body>

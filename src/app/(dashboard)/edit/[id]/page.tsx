@@ -1,25 +1,29 @@
+"use client"
+
 import { TradeForm } from "@/features/trades/components/TradeForm"
-import { getRules, getTradeById } from "@/lib/db"
-import { getServerSession } from "next-auth/next"
-import { authOptions } from "@/lib/auth"
-import { redirect } from "next/navigation"
+import { useData } from "@/shared/context/DataContext"
+import { useSession } from "next-auth/react"
+import { useRouter, useParams } from "next/navigation"
+import { useEffect } from "react"
 
-export default async function EditTradePage({ params }: { params: Promise<{ id: string }> }) {
-    const session = await getServerSession(authOptions)
+export default function EditTradePage() {
+    const { data: session, status } = useSession();
+    const router = useRouter();
+    const params = useParams();
+    const { trades, rules } = useData();
 
-    if (!session || !session.user?.email) {
-        redirect("/login")
+    useEffect(() => {
+        if (status === "unauthenticated") {
+            router.push("/login");
+        }
+    }, [status, router]);
+
+    if (status === "loading") {
+        return null;
     }
 
-    const { email } = session.user
-    
-    // Await params object for Next.js 15+ constraints
-    const { id } = await params;
-    
-    const [rules, trade] = await Promise.all([
-        getRules(email),
-        getTradeById(id, email)
-    ])
+    const id = params?.id as string;
+    const trade = trades.find(t => t.id === id);
 
     if (!trade) {
         return (
