@@ -115,8 +115,8 @@ export function MonthlyView({ trades, rules, monthlyAnalyses }: { trades: Trade[
                                     <div className="flex justify-between items-start">
                                         <h3 className="font-bold text-lg sm:text-xl">{format(monthDate, "MMM")}</h3>
                                         {hasAnalysis && (
-                                            <div className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-400 px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider flex items-center gap-1 shadow-sm">
-                                                <PenTool className="w-3 h-3" /> SAVED
+                                            <div className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-400 p-1 sm:px-2 sm:py-0.5 rounded-full flex items-center gap-1 shadow-sm" title="Analysis Saved">
+                                                <PenTool className="w-3 h-3" /> <span className="hidden sm:inline text-[10px] font-bold tracking-wider">SAVED</span>
                                             </div>
                                         )}
                                     </div>
