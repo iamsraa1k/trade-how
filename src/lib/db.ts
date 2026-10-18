@@ -36,6 +36,18 @@ export interface Trade {
     checklist?: string[];
     processGrade?: "A" | "B" | "C" | null;
     repeatNote?: string;
+
+    // Automated paper trades (scanner + paper engine)
+    auto?: boolean;
+    instrumentKey?: string | null;
+    currentStop?: number | null;
+    gttExpiry?: string | null;
+    signalDate?: string | null;
+    trailActive?: boolean;
+    everAbovePlusOneR?: boolean;
+    pendingExit?: "stop" | "breakeven" | "trail" | "time" | "results" | null;
+    sessionsHeld?: number;
+    lastProcessedDate?: string | null;
 }
 
 export interface Rule {
@@ -316,4 +328,68 @@ export async function deleteImpulse(id: string, userId: string): Promise<void> {
     const doc = await ref.get();
     if (!doc.exists || doc.data()?.userId !== userId) throw new Error("Not found");
     await ref.delete();
+}
+
+// ---------------------------------------------------------------------------
+// Automation (scanner, alerts, paper engine)
+// ---------------------------------------------------------------------------
+
+export interface ScanStock {
+    symbol: string
+    name: string
+    sector: string
+    instrumentKey: string
+    close: number
+    high: number
+    low: number
+    volumeRatio: number
+    baseWeeks: number
+    baseRangePct: number
+    resultsDate: string | null
+}
+
+export interface ScanResult {
+    date: string
+    ranAt: string
+    marketLight: { close: number; sma200: number; green: boolean }
+    breakouts: ScanStock[]
+    bases: ScanStock[]
+    universeSize: number
+    universeSource: "live" | "bundled"
+    failures: number
+    resultsCalendar: boolean
+}
+
+// Server-only: holds the Telegram bot token, so it is never sent to the browser as-is.
+export interface AutomationDoc {
+    userId: string
+    telegram?: { botToken?: string; botUsername?: string; chatId?: number | null; linkCode?: string } | null
+    lastRunDate?: string | null
+    lastRunAt?: string | null
+    lastSummary?: string | null
+    lastError?: string | null
+    recentMessages?: { at: string; text: string }[]
+}
+
+export async function getAutomation(userId: string): Promise<AutomationDoc | null> {
+    const doc = await db.collection("automation").doc(userId).get();
+    return doc.exists ? (doc.data() as AutomationDoc) : null;
+}
+
+export async function saveAutomation(userId: string, data: Partial<Omit<AutomationDoc, 'userId'>>): Promise<void> {
+    await db.collection("automation").doc(userId).set({ ...data, userId }, { merge: true });
+}
+
+export async function saveScan(scan: ScanResult): Promise<void> {
+    await db.collection("scans").doc(scan.date).set(scan);
+}
+
+export async function getScan(date: string): Promise<ScanResult | null> {
+    const doc = await db.collection("scans").doc(date).get();
+    return doc.exists ? (doc.data() as ScanResult) : null;
+}
+
+export async function getLatestScan(): Promise<ScanResult | null> {
+    const snapshot = await db.collection("scans").orderBy("date", "desc").limit(1).get();
+    return snapshot.empty ? null : (snapshot.docs[0].data() as ScanResult);
 }

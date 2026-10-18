@@ -371,6 +371,11 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Tr
                                                                 PAPER
                                                             </div>
                                                         )}
+                                                        {trade.auto && (
+                                                            <div className="px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                                                                AUTO
+                                                            </div>
+                                                        )}
                                                         {isBreakout(trade) && trade.processGrade && (
                                                             <div className={`px-2.5 py-1 rounded-full text-xs font-semibold ${trade.processGrade === 'A' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : trade.processGrade === 'C' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'}`}>
                                                                 GRADE {trade.processGrade}

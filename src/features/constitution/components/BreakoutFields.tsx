@@ -3,8 +3,9 @@
 import * as React from "react"
 import Link from "next/link"
 import { format, parseISO } from "date-fns"
-import { AlertTriangle, Calculator, CircleDot, Info, ShieldAlert } from "lucide-react"
+import { AlertTriangle, Calculator, CircleDot, Info, ShieldAlert, Sparkles } from "lucide-react"
 
+import { Button } from "@/shared/components/ui/button"
 import { Input } from "@/shared/components/ui/input"
 import { Label } from "@/shared/components/ui/label"
 import { cn } from "@/lib/utils"
@@ -74,6 +75,8 @@ export function BreakoutFields({
     status,
     isPaper,
     calculatedPnl,
+    onAutoFill,
+    autoFillState,
 }: {
     formData: { date: string; symbol: string; entry: string; exit: string; quantity: string; fees: string; pnl: string }
     onInput: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void
@@ -83,6 +86,8 @@ export function BreakoutFields({
     status: ConstitutionStatus
     isPaper: boolean
     calculatedPnl: number | null
+    onAutoFill: () => void
+    autoFillState: { loading: boolean; summary: string | null; ok: boolean }
 }) {
     const equity = status.monthEquities[formData.date.slice(0, 7)] ?? status.monthEquity
     const oneR = equity * status.riskPct / 100
@@ -111,10 +116,18 @@ export function BreakoutFields({
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="sector">Sector</Label>
-                        <Input name="sector" id="sector" list="mb-sectors" placeholder="e.g. Auto" className="bg-background shadow-sm w-full" value={mb.sector} onChange={e => setMb({ sector: e.target.value })} />
+                        <Input name="sector" id="sector" list="mb-sectors" placeholder="e.g. Capital Goods" className="bg-background shadow-sm w-full" value={mb.sector} onChange={e => setMb({ sector: e.target.value })} />
                         <datalist id="mb-sectors">
                             {SECTORS.map(s => <option key={s} value={s} />)}
                         </datalist>
+                    </div>
+                    <div className="md:col-span-2 flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg border border-dashed border-indigo-300 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20 p-3">
+                        <Button type="button" size="sm" variant="outline" onClick={onAutoFill} disabled={autoFillState.loading || !formData.symbol.trim()} className="shrink-0">
+                            <Sparkles className="h-4 w-4 mr-2 text-indigo-500" /> {autoFillState.loading ? "Fetching…" : "Fill from market data"}
+                        </Button>
+                        <p className={cn("text-xs", autoFillState.summary ? (autoFillState.ok ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300") : "text-muted-foreground")}>
+                            {autoFillState.summary || "Fills sector, market light, base, volume ratio, results date and the GTT plan from Upstox's daily candles for the breakout day."}
+                        </p>
                     </div>
                     <div className="space-y-2">
                         <Label>Position status</Label>

@@ -1,7 +1,11 @@
 'use server'
 
 import { getTrades, saveTrade, updateTrade, deleteTrade, getRules, addRule, deleteRule, getMonthlyAnalyses, saveMonthlyAnalysis, saveConstitution, addBreaches, deleteBreach, addImpulse, updateImpulse, deleteImpulse } from '@/lib/db';
+import { getAutomation, saveAutomation, getLatestScan } from '@/lib/db';
 import type { Trade, ConstitutionSettings } from '@/lib/db';
+import { analyzeSymbol, automationUsers, isAutomationUser } from '@/features/automation/lib/pipeline';
+import { findChatForCode, getBotUsername, sendMessage } from '@/features/automation/lib/telegram';
+import { randomUUID } from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
@@ -368,5 +372,101 @@ export async function deleteImpulseAction(id: string) {
     } catch (error) {
         console.error("Failed to delete impulse", error);
         return { success: false, error: "Failed to delete impulse" };
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Automation: Telegram alerts, scanner overview, market-data auto-fill
+// ---------------------------------------------------------------------------
+
+export async function getAutomationOverviewAction() {
+    const userId = await getAuthenticatedUser();
+    const [automation, latestScan] = await Promise.all([getAutomation(userId), getLatestScan().catch(() => null)]);
+    const tg = automation?.telegram;
+    return {
+        account: userId,
+        enabled: isAutomationUser(userId),
+        anyUsersConfigured: automationUsers().length > 0,
+        cronSecretSet: !!process.env.CRON_SECRET,
+        telegram: {
+            hasToken: !!tg?.botToken,
+            botUsername: tg?.botUsername || null,
+            linked: !!tg?.chatId,
+            startLink: tg?.botUsername && tg?.linkCode ? `https://t.me/${tg.botUsername}?start=${tg.linkCode}` : null,
+        },
+        lastRunDate: automation?.lastRunDate || null,
+        lastRunAt: automation?.lastRunAt || null,
+        lastSummary: automation?.lastSummary || null,
+        lastError: automation?.lastError || null,
+        recentMessages: automation?.recentMessages || [],
+        latestScan,
+    };
+}
+
+export async function saveTelegramBotAction(token: string) {
+    try {
+        const userId = await getAuthenticatedUser();
+        const clean = token.trim();
+        if (!/^\d+:[\w-]{30,}$/.test(clean)) return { success: false, error: "That doesn't look like a bot token from @BotFather." };
+        const botUsername = await getBotUsername(clean);
+        const linkCode = randomUUID().replace(/-/g, "").slice(0, 10);
+        await saveAutomation(userId, { telegram: { botToken: clean, botUsername, chatId: null, linkCode } });
+        return { success: true, startLink: `https://t.me/${botUsername}?start=${linkCode}`, botUsername };
+    } catch (error) {
+        console.error("Failed to save Telegram bot", error);
+        return { success: false, error: error instanceof Error ? error.message : "Couldn't reach Telegram with that token" };
+    }
+}
+
+export async function linkTelegramAction() {
+    try {
+        const userId = await getAuthenticatedUser();
+        const tg = (await getAutomation(userId))?.telegram;
+        if (!tg?.botToken || !tg.linkCode) return { success: false, error: "Save your bot token first." };
+        const chatId = await findChatForCode(tg.botToken, tg.linkCode);
+        if (!chatId) return { success: false, error: "No /start message with your code yet. Open the bot link, tap Start, then try again." };
+        await saveAutomation(userId, { telegram: { ...tg, chatId } });
+        await sendMessage(tg.botToken, chatId, "✅ <b>TradeHow is linked.</b> Evening digests arrive after the close on trading days, and the weekly review on Saturday morning.");
+        return { success: true };
+    } catch (error) {
+        console.error("Failed to link Telegram", error);
+        return { success: false, error: error instanceof Error ? error.message : "Failed to link Telegram" };
+    }
+}
+
+export async function sendTelegramTestAction() {
+    try {
+        const userId = await getAuthenticatedUser();
+        const tg = (await getAutomation(userId))?.telegram;
+        if (!tg?.botToken || !tg.chatId) return { success: false, error: "Link Telegram first." };
+        await sendMessage(tg.botToken, tg.chatId, "🔔 Test alert from TradeHow. If you can read this, alerts work.");
+        return { success: true };
+    } catch (error) {
+        console.error("Failed to send Telegram test", error);
+        return { success: false, error: error instanceof Error ? error.message : "Failed to send test" };
+    }
+}
+
+export async function disconnectTelegramAction() {
+    try {
+        const userId = await getAuthenticatedUser();
+        await saveAutomation(userId, { telegram: null });
+        return { success: true };
+    } catch (error) {
+        console.error("Failed to disconnect Telegram", error);
+        return { success: false, error: "Failed to disconnect Telegram" };
+    }
+}
+
+export async function analyzeSymbolAction(symbol: string, date: string | null) {
+    try {
+        await getAuthenticatedUser();
+        if (!symbol.trim()) return { success: false, error: "Enter a stock symbol first." };
+        const result = await analyzeSymbol(symbol, date);
+        if ("error" in result) return { success: false, error: result.error };
+        return { success: true, data: result };
+    } catch (error) {
+        console.error("Failed to analyse symbol", error);
+        return { success: false, error: "Market data is unavailable right now. Try again, or enter the values by hand." };
     }
 }

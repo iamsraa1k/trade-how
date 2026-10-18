@@ -3,13 +3,14 @@
 import * as React from "react"
 import Link from "next/link"
 import { format, parseISO, startOfWeek, subWeeks, endOfWeek } from "date-fns"
-import { AlertTriangle, ArrowRight, Calculator, FileText, Moon, Pencil } from "lucide-react"
+import { AlertTriangle, ArrowRight, Bot, Calculator, FileText, Moon, Pencil, Sparkles } from "lucide-react"
 
 import { Button } from "@/shared/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/shared/components/ui/card"
 import { Input } from "@/shared/components/ui/input"
 import { Label } from "@/shared/components/ui/label"
 import type { Breach, ConstitutionSettings, Trade } from "@/lib/db"
+import { analyzeSymbolAction } from "@/app/actions"
 import { cn } from "@/lib/utils"
 import { MAX_ENTRIES_PER_WEEK, MAX_OPEN_POSITIONS, MAX_PER_SECTOR, ROUTINE_STEPS, WEEKLY_REVIEW_ITEMS } from "../lib/rules"
 import {
@@ -135,10 +136,13 @@ function OpenPositions({ trades, status }: { trades: Trade[]; status: Constituti
                             const toResults = t.resultsDate ? tradingDaysBetween(status.today, t.resultsDate) : null
                             const daysHeld = tradingDaysBetween(t.date, status.today)
                             const alerts: string[] = []
-                            if (pending && status.today > gttExpiry) alerts.push(`GTT not triggered within 3 trading days (by ${format(parseISO(gttExpiry), "d MMM")}): delete it.`)
-                            if (!pending && !t.stopPrice) alerts.push("No stop recorded. Place the stop GTT now.")
-                            if (!pending && toResults !== null && toResults >= 0 && toResults <= 2) alerts.push(`Results in ${toResults} trading day${toResults === 1 ? "" : "s"}: exit at the open of the day before (sell half if up 2R+).`)
-                            if (!pending && lv.timeStopDate && status.today >= lv.timeStopDate) alerts.push(`15 trading days passed: sell at the next open unless it has closed above ${inr(lv.plusOneR, 2)}.`)
+                            // Auto paper trades are managed by the paper engine, so only your own positions get reminders.
+                            if (!t.auto) {
+                                if (pending && status.today > gttExpiry) alerts.push(`GTT not triggered within 3 trading days (by ${format(parseISO(gttExpiry), "d MMM")}): delete it.`)
+                                if (!pending && !t.stopPrice) alerts.push("No stop recorded. Place the stop GTT now.")
+                                if (!pending && toResults !== null && toResults >= 0 && toResults <= 2) alerts.push(`Results in ${toResults} trading day${toResults === 1 ? "" : "s"}: exit at the open of the day before (sell half if up 2R+).`)
+                                if (!pending && lv.timeStopDate && status.today >= lv.timeStopDate) alerts.push(`15 trading days passed: sell at the next open unless it has closed above ${inr(lv.plusOneR, 2)}.`)
+                            }
                             return (
                                 <div key={t.id} className={cn("rounded-xl border bg-background/70 p-4", t.isPaper && "border-dashed border-teal-300 dark:border-teal-800")}>
                                     <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -147,19 +151,24 @@ function OpenPositions({ trades, status }: { trades: Trade[]; status: Constituti
                                                 {t.symbol}
                                                 {t.sector && <span className="text-xs font-medium text-muted-foreground">{t.sector}</span>}
                                                 {t.isPaper && <span className="text-[10px] font-semibold bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 px-2 py-0.5 rounded-full flex items-center gap-1"><FileText className="h-3 w-3" />PAPER</span>}
+                                                {t.auto && <span className="text-[10px] font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 px-2 py-0.5 rounded-full flex items-center gap-1"><Bot className="h-3 w-3" />AUTO</span>}
                                                 {pending && <span className="text-[10px] font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300 px-2 py-0.5 rounded-full">GTT PENDING</span>}
                                             </p>
                                             <p className="text-xs text-muted-foreground">
                                                 {pending ? `Placed ${format(parseISO(t.date), "d MMM")} · trigger ${inr(t.trigger, 2)} · limit ${inr(t.limitPrice, 2)}` : `Filled ${format(parseISO(t.date), "d MMM")} at ${inr(t.entryPrice, 2)} · ${t.quantity} shares · day ${daysHeld} of 15`}
                                             </p>
                                         </div>
-                                        <Button asChild size="sm" variant="outline">
-                                            <Link href={`/edit/${t.id}`}><Pencil className="h-3.5 w-3.5 mr-1.5" />{pending ? "Record fill" : "Update / close"}</Link>
-                                        </Button>
+                                        {t.auto ? (
+                                            <span className="text-xs text-muted-foreground">Managed nightly by the paper engine</span>
+                                        ) : (
+                                            <Button asChild size="sm" variant="outline">
+                                                <Link href={`/edit/${t.id}`}><Pencil className="h-3.5 w-3.5 mr-1.5" />{pending ? "Record fill" : "Update / close"}</Link>
+                                            </Button>
+                                        )}
                                     </div>
                                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-3 text-sm">
                                         {[
-                                            { label: "Stop", value: inr(t.stopPrice, 2) },
+                                            { label: t.currentStop && t.currentStop !== t.stopPrice ? "Stop (moved)" : "Stop", value: inr(t.currentStop || t.stopPrice, 2) },
                                             { label: "Breakeven at (1.5R)", value: inr(lv.breakeven, 2) },
                                             { label: "Trail from (2R)", value: inr(lv.trailStart, 2) },
                                             { label: "Time stop", value: lv.timeStopDate ? format(parseISO(lv.timeStopDate), "d MMM") : "—" },
@@ -203,6 +212,26 @@ function SizingCalculator({ status }: { status: ConstitutionStatus }) {
     const [sector, setSector] = React.useState("")
     const [high, setHigh] = React.useState("")
     const [low, setLow] = React.useState("")
+    const [fetchState, setFetchState] = React.useState<{ loading: boolean; text: string | null; ok: boolean }>({ loading: false, text: null, ok: false })
+
+    const fetchLatest = async () => {
+        setFetchState({ loading: true, text: null, ok: false })
+        const result = await analyzeSymbolAction(symbol, null)
+        if (!result.success || !result.data) {
+            setFetchState({ loading: false, text: result.error || "Couldn't fetch market data.", ok: false })
+            return
+        }
+        const d = result.data
+        setSymbol(d.symbol)
+        setSector(d.sector)
+        setHigh(String(d.high))
+        setLow(String(d.low))
+        setFetchState({
+            loading: false,
+            ok: d.isBreakout && d.marketLight === "green",
+            text: `${d.isBreakout ? `Breakout on ${d.breakoutDate}` : `${d.breakoutDate}: not a breakout`} · light ${d.marketLight} · volume ${d.volumeRatio}× · ${d.baseWeeks}-week base · ${d.resultsDate ? `results ${d.resultsDate}` : "results not announced"}`,
+        })
+    }
 
     const result = high && low
         ? computeSizing({ high: parseFloat(high), low: parseFloat(low), equity: status.monthEquity, riskPct: status.riskPct, capPct: status.settings.positionCapPct })
@@ -254,11 +283,16 @@ function SizingCalculator({ status }: { status: ConstitutionStatus }) {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div className="space-y-1.5">
                         <Label htmlFor="calc-symbol">Stock</Label>
-                        <Input id="calc-symbol" placeholder="e.g. TATAMOTORS" className="font-mono uppercase" value={symbol} onChange={e => setSymbol(e.target.value)} />
+                        <div className="flex gap-1.5">
+                            <Input id="calc-symbol" placeholder="e.g. TATAMOTORS" className="font-mono uppercase min-w-0" value={symbol} onChange={e => setSymbol(e.target.value)} />
+                            <Button type="button" size="icon" variant="outline" className="shrink-0" onClick={fetchLatest} disabled={!symbol.trim() || fetchState.loading} title="Fetch the latest breakout day from market data" aria-label="Fetch from market data">
+                                <Sparkles className={cn("h-4 w-4 text-indigo-500", fetchState.loading && "animate-pulse")} />
+                            </Button>
+                        </div>
                     </div>
                     <div className="space-y-1.5">
                         <Label htmlFor="calc-sector">Sector</Label>
-                        <Input id="calc-sector" placeholder="e.g. Auto" value={sector} onChange={e => setSector(e.target.value)} />
+                        <Input id="calc-sector" placeholder="e.g. Capital Goods" value={sector} onChange={e => setSector(e.target.value)} />
                     </div>
                     <div className="space-y-1.5">
                         <Label htmlFor="calc-high">Breakout-day high</Label>
@@ -269,6 +303,9 @@ function SizingCalculator({ status }: { status: ConstitutionStatus }) {
                         <Input id="calc-low" type="number" step="any" className="font-mono" value={low} onChange={e => setLow(e.target.value)} />
                     </div>
                 </div>
+                {fetchState.text && (
+                    <p className={cn("text-xs", fetchState.ok ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300")}>{fetchState.text}</p>
+                )}
                 <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                     Try the plan&apos;s worked examples:
                     {CASES.map(c => (
@@ -330,7 +367,7 @@ type Period = "this" | "last" | "4w" | "all"
 
 function WeeklyReview({ trades, status }: { trades: Trade[]; status: ConstitutionStatus }) {
     const [period, setPeriod] = React.useState<Period>("this")
-    const [paper, setPaper] = React.useState(false)
+    const [mode, setMode] = React.useState<"live" | "paper" | "auto">("live")
 
     const today = parseISO(status.today)
     const ranges: Record<Period, [string, string]> = {
@@ -341,7 +378,8 @@ function WeeklyReview({ trades, status }: { trades: Trade[]; status: Constitutio
     }
     const [from, to] = ranges[period]
     const scoped = trades.filter(t =>
-        isBreakout(t) && t.status !== "open" && !!t.isPaper === paper &&
+        isBreakout(t) && t.status !== "open" &&
+        (mode === "live" ? !t.isPaper : mode === "paper" ? t.isPaper && !t.auto : !!t.auto) &&
         t.date >= status.settings.startDate && realizedDate(t) >= from && realizedDate(t) <= to
     )
     const s = reviewStats(scoped)
@@ -374,8 +412,8 @@ function WeeklyReview({ trades, status }: { trades: Trade[]; status: Constitutio
                         ))}
                     </div>
                     <div className="flex rounded-lg bg-muted/50 p-1 border">
-                        {[false, true].map(p => (
-                            <button key={String(p)} onClick={() => setPaper(p)} className={cn("rounded-md px-2.5 py-1 text-xs font-semibold", paper === p ? "bg-background shadow-sm" : "text-muted-foreground")}>{p ? "Paper" : "Live"}</button>
+                        {([["live", "Live"], ["paper", "Paper"], ["auto", "Auto"]] as const).map(([m, label]) => (
+                            <button key={m} onClick={() => setMode(m)} className={cn("rounded-md px-2.5 py-1 text-xs font-semibold", mode === m ? "bg-background shadow-sm" : "text-muted-foreground")}>{label}</button>
                         ))}
                     </div>
                 </div>

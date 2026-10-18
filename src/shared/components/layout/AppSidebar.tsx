@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Calendar, List, CheckSquare, PlusCircle, FileText, TrendingUp, Layers, ScrollText, Moon, Gavel } from "lucide-react";
+import { LayoutDashboard, Calendar, List, CheckSquare, PlusCircle, FileText, TrendingUp, Layers, ScrollText, Moon, Gavel, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTradeFilter, TradeMode } from "@/features/trades/context/TradeFilterContext";
 
@@ -17,6 +17,7 @@ const constitutionItems = [
   { name: "Constitution", href: "/constitution", icon: ScrollText },
   { name: "Evening Routine", href: "/routine", icon: Moon },
   { name: "Discipline", href: "/discipline", icon: Gavel },
+  { name: "Automation", href: "/automation", icon: Bot },
 ];
 
 const filterOptions: { mode: TradeMode; label: string; icon: React.ElementType; description: string }[] = [

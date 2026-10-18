@@ -197,10 +197,26 @@ export const EXIT_REASONS: { value: "stop" | "breakeven" | "trail" | "time" | "r
     { value: "other", label: "Other (not a written rule)" },
 ]
 
+// NSE industry names, as in the Nifty 200 list, so typed and auto-filled sectors match for the 2-per-sector limit.
 export const SECTORS = [
-    "Auto", "Banks", "Capital Goods", "Cement", "Chemicals", "Consumer Durables", "Defence", "Energy",
-    "FMCG", "Financial Services", "Healthcare", "Infrastructure", "IT", "Media", "Metals", "Oil & Gas",
-    "Pharma", "Power", "Realty", "Retail", "Telecom", "Textiles",
+    "Automobile and Auto Components",
+    "Capital Goods",
+    "Chemicals",
+    "Construction",
+    "Construction Materials",
+    "Consumer Durables",
+    "Consumer Services",
+    "Fast Moving Consumer Goods",
+    "Financial Services",
+    "Healthcare",
+    "Information Technology",
+    "Metals & Mining",
+    "Oil Gas & Consumable Fuels",
+    "Power",
+    "Realty",
+    "Services",
+    "Telecommunication",
+    "Textiles",
 ]
 
 export const PHASES: { phase: 0 | 1 | 2 | 3 | 4; name: string; span: string; points: string[]; gate?: { name: string; text: string } }[] = [

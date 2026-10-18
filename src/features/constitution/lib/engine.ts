@@ -606,9 +606,10 @@ export function evaluateBacktest(bt: BacktestResult | null) {
     return { rows, passed }
 }
 
+// Stage 2 tests your own routine, so automated paper trades (a forward test of the setup) don't count here.
 export function paperStage(trades: Trade[], settings: ResolvedSettings, today = todayISO()) {
     const paper = trades
-        .filter(t => isBreakout(t) && t.isPaper && t.status !== "open" && t.date >= settings.startDate)
+        .filter(t => isBreakout(t) && t.isPaper && !t.auto && t.status !== "open" && t.date >= settings.startDate)
         .sort((a, b) => a.date.localeCompare(b.date))
     const stats = reviewStats(paper)
     const first = paper[0]?.date || null

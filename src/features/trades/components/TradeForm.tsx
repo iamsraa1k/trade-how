@@ -23,12 +23,12 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/shared/components/ui/dialog"
-import { addNewTrade, updateTradeAction } from "@/app/actions"
+import { addNewTrade, analyzeSymbolAction, updateTradeAction } from "@/app/actions"
 import { useRouter } from "next/navigation"
 import type { Rule } from "@/lib/db"
 import { useData } from "@/shared/context/DataContext"
 import { LADDER, SETUP_ID } from "@/features/constitution/lib/rules"
-import { computeStatus, evaluateTrade, suggestGrade, tradeLevels, type Grade } from "@/features/constitution/lib/engine"
+import { computeSizing, computeStatus, evaluateTrade, suggestGrade, tradeLevels, type Grade } from "@/features/constitution/lib/engine"
 import { BreakoutChecklist, BreakoutFields, LevelBadge, RuleFindings, type BreakoutState } from "@/features/constitution/components/BreakoutFields"
 
 type TradeQuality = "flawless" | "acceptable" | "violation"
@@ -96,6 +96,7 @@ export function TradeForm({ rules, initialData, id, prefill }: { rules: Rule[], 
     const setMb = (patch: Partial<BreakoutState>) => setMbState(prev => ({ ...prev, ...patch }))
     const [manualGrade, setManualGrade] = React.useState<Grade | null>(null)
     const [pendingSubmit, setPendingSubmit] = React.useState<FormData | null>(null)
+    const [autoFill, setAutoFill] = React.useState<{ loading: boolean; summary: string | null; ok: boolean }>({ loading: false, summary: null, ok: false })
 
     const constitutionStatus = React.useMemo(() => computeStatus(constitution, trades, breaches), [constitution, trades, breaches])
     const levels = tradeLevels({
@@ -250,6 +251,42 @@ export function TradeForm({ rules, initialData, id, prefill }: { rules: Rule[], 
         } else {
             setCalculatedPnl(null)
         }
+    }
+
+    // Pulls the breakout day's numbers from market data and fills what the evening routine would have looked up.
+    const handleAutoFill = async () => {
+        setAutoFill({ loading: true, summary: null, ok: false })
+        const result = await analyzeSymbolAction(formData.symbol, formData.date || null)
+        if (!result.success || !result.data) {
+            setAutoFill({ loading: false, summary: result.error || "Couldn't fetch market data.", ok: false })
+            return
+        }
+        const d = result.data
+        const sizing = computeSizing({ high: d.high, low: d.low, equity: constitutionStatus.monthEquity, riskPct: constitutionStatus.riskPct, capPct: constitutionStatus.settings.positionCapPct })
+        const plan = "error" in sizing ? null : sizing
+        const confirmed = new Set(mb.checklist)
+        const setItem = (id: string, on: boolean) => (on ? confirmed.add(id) : confirmed.delete(id))
+        setItem("light", d.marketLight === "green")
+        setItem("strong", d.checks.aboveSma50 && d.checks.sma50AboveSma200 && d.checks.sma200Rising && d.checks.near52wHigh)
+        setItem("breakout", d.isBreakout)
+        setMb({
+            sector: d.sector,
+            marketLight: d.marketLight,
+            baseWeeks: String(d.baseWeeks),
+            volumeRatio: String(d.volumeRatio),
+            resultsDate: d.resultsDate || mb.resultsDate,
+            trigger: mb.trigger || (plan ? plan.trigger.toFixed(1) : ""),
+            limitPrice: mb.limitPrice || (plan ? plan.limit.toFixed(1) : ""),
+            stopPrice: mb.stopPrice || (plan ? plan.stop.toFixed(1) : ""),
+            checklist: [...confirmed],
+        })
+        if (!formData.quantity && plan && !plan.skip) setFormData(prev => ({ ...prev, quantity: String(plan.shares) }))
+        const failed = Object.entries(d.checks).filter(([, ok]) => !ok).map(([k]) => k.replace(/([A-Z])/g, " $1").toLowerCase())
+        setAutoFill({
+            loading: false,
+            ok: d.isBreakout && d.marketLight === "green",
+            summary: `${d.name}: ${d.isBreakout ? `breakout on ${d.breakoutDate}` : `not a breakout on ${d.breakoutDate} (failed: ${failed.join(", ")})`}. Light ${d.marketLight}, volume ${d.volumeRatio}×, ${d.baseWeeks}-week base${d.resultsDate ? `, results ${d.resultsDate}` : ", results date not announced"}.${plan?.skip ? " Stop wider than 8%: skip." : ""}`,
+        })
     }
 
     const handleSubmit = async (data: FormData) => {
@@ -445,6 +482,8 @@ export function TradeForm({ rules, initialData, id, prefill }: { rules: Rule[], 
                             status={constitutionStatus}
                             isPaper={isPaper}
                             calculatedPnl={calculatedPnl}
+                            onAutoFill={handleAutoFill}
+                            autoFillState={autoFill}
                         />
                     ) : (<>
                     {/* Section 1: Asset Details */}
