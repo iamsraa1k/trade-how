@@ -88,13 +88,26 @@ export async function saveTrade(trade: Omit<Trade, 'id' | 'userId'>, userId: str
     } as Trade;
 }
 
+// Returns the document reference only if it exists and belongs to userId, so one user can't touch another's data by ID.
+async function getOwnedDocRef(collection: string, id: string, userId: string) {
+    const ref = db.collection(collection).doc(id);
+    const doc = await ref.get();
+    if (!doc.exists || doc.data()?.userId !== userId) {
+        throw new Error(`${collection}/${id} not found for this user`);
+    }
+    return ref;
+}
+
 export async function deleteTrade(id: string, userId: string): Promise<void> {
-    await db.collection("trades").doc(id).delete();
+    const tradeRef = await getOwnedDocRef("trades", id, userId);
+    await tradeRef.delete();
 }
 
 export async function updateTrade(id: string, updatedData: Partial<Trade>, userId: string): Promise<Trade | null> {
-    const tradeRef = db.collection("trades").doc(id);
-    await tradeRef.update(updatedData);
+    const tradeRef = await getOwnedDocRef("trades", id, userId);
+    const safeData = { ...updatedData };
+    delete safeData.userId;
+    await tradeRef.update(safeData);
     return {
         id,
         ...updatedData
@@ -126,7 +139,8 @@ export async function addRule(userId: string, text: string): Promise<Rule> {
 }
 
 export async function deleteRule(id: string, userId: string): Promise<void> {
-    await db.collection("rules").doc(id).delete();
+    const ruleRef = await getOwnedDocRef("rules", id, userId);
+    await ruleRef.delete();
 }
 
 export interface MonthlyAnalysis {
