@@ -50,21 +50,10 @@ function SetupCard({ overview, onChange }: { overview: Overview; onChange: () =>
         <Card className="glass-card">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Bot className="h-5 w-5 text-indigo-500" /> Set up</CardTitle>
-                <CardDescription>Three one-time steps. After that, everything runs on its own after the close.</CardDescription>
+                <CardDescription>Two one-time steps. After that, everything runs on its own after the close.</CardDescription>
             </CardHeader>
             <CardContent>
                 <ol className="space-y-5">
-                    <Step done={overview.enabled}>
-                        <p className="font-semibold">Turn automation on for this account</p>
-                        {overview.enabled ? (
-                            <p className="text-muted-foreground">On for <span className="font-mono">{overview.account}</span>.</p>
-                        ) : (
-                            <p className="text-muted-foreground mt-1">
-                                In Vercel → your project → Settings → Environment Variables, add <span className="font-mono text-foreground">AUTOMATION_EMAILS</span> with the Google emails you sign in with, separated by commas (this one is <span className="font-mono text-foreground">{overview.account}</span>), then redeploy. Only listed accounts get scans, paper trading and alerts.
-                            </p>
-                        )}
-                    </Step>
-
                     <Step done={tg.linked}>
                         <p className="font-semibold">Connect Telegram</p>
                         {tg.linked ? (

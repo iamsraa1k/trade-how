@@ -38,7 +38,7 @@ const toNumber = (v: string) => (v === "" || isNaN(parseFloat(v)) ? null : parse
 export function TradeForm({ rules, initialData, id, prefill }: { rules: Rule[], initialData?: any, id?: string, prefill?: Record<string, string> }) {
     const router = useRouter()
     const [isSubmitting, setIsSubmitting] = React.useState(false)
-    const { trades, constitution, breaches } = useData()
+    const { trades, constitution, breaches, constitutionMode } = useData()
 
     // Form inputs state
     const [formData, setFormData] = React.useState({
@@ -76,7 +76,7 @@ export function TradeForm({ rules, initialData, id, prefill }: { rules: Rule[], 
     const [calculatedPnl, setCalculatedPnl] = React.useState<number | null>(null)
 
     // Trading Constitution: Momentum Breakout is the default setup for new trades.
-    const [isBreakoutSetup, setIsBreakoutSetup] = React.useState<boolean>(initialData ? initialData.setup === SETUP_ID : true)
+    const [isBreakoutSetup, setIsBreakoutSetup] = React.useState<boolean>(initialData ? initialData.setup === SETUP_ID : constitutionMode)
     const [mb, setMbState] = React.useState<BreakoutState>(() => ({
         status: initialData ? (initialData.status === "open" ? "open" : "closed") : "open",
         sector: initialData?.sector || prefill?.sector || "",
@@ -437,7 +437,8 @@ export function TradeForm({ rules, initialData, id, prefill }: { rules: Rule[], 
             </CardHeader>
             <CardContent className="pt-6">
                 <form className="space-y-8" action={handleSubmit}>
-                    {/* Setup picker */}
+                    {/* Setup picker (constitution mode only) */}
+                    {constitutionMode && (
                     <div className="grid grid-cols-2 gap-3">
                         {[
                             { breakout: true, icon: Rocket, title: "Momentum Breakout", subtitle: "Constitution setup · CNC swing" },
@@ -464,8 +465,9 @@ export function TradeForm({ rules, initialData, id, prefill }: { rules: Rule[], 
                             </button>
                         ))}
                     </div>
+                    )}
 
-                    {!isBreakoutSetup && !isPaper && !id && (
+                    {constitutionMode && !isBreakoutSetup && !isPaper && !id && (
                         <div className="flex items-start gap-3 rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/20 p-4 text-sm text-amber-900 dark:text-amber-200">
                             <ScrollText className="h-4 w-4 mt-0.5 shrink-0" />
                             <p>Your constitution allows one live setup: Momentum Breakout, delivery only. A trade outside the setup is a Level 2 breach, and any F&amp;O trade is Level 4. Log it in the Discipline page if this is one.</p>

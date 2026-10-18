@@ -14,7 +14,7 @@ import { FileText } from "lucide-react"
 import { ConstitutionStatusPanel } from "@/features/constitution/components/ConstitutionStatusPanel"
 import { computeStatus } from "@/features/constitution/lib/engine"
 
-export function Dashboard({ trades, rules, constitution = null, breaches = [] }: { trades: Trade[], rules: Rule[], constitution?: ConstitutionSettings | null, breaches?: Breach[] }) {
+export function Dashboard({ trades, rules, constitution = null, breaches = [], constitutionMode = false }: { trades: Trade[], rules: Rule[], constitution?: ConstitutionSettings | null, breaches?: Breach[], constitutionMode?: boolean }) {
     const { tradeMode, filterTrades } = useTradeFilter()
     const visibleTrades = filterTrades(trades)
     const constitutionStatus = useMemo(() => computeStatus(constitution, trades, breaches), [constitution, trades, breaches])
@@ -107,7 +107,7 @@ export function Dashboard({ trades, rules, constitution = null, breaches = [] }:
                 </div>
             </div>
 
-            <ConstitutionStatusPanel status={constitutionStatus} compact />
+            {constitutionMode && <ConstitutionStatusPanel status={constitutionStatus} compact />}
 
             <div className="w-full pb-2">
                 <CalendarView trades={visibleTrades} rules={rules} currentMonth={currentMonth} onMonthChange={setCurrentMonth} />

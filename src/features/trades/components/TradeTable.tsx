@@ -53,7 +53,7 @@ function ResultR({ trade }: { trade: Trade }) {
     )
 }
 
-export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Trade[], rules: Rule[], monthlyAnalyses?: MonthlyAnalysis[] }) {
+export function TradeTable({ trades, rules, monthlyAnalyses = [], constitutionMode = false }: { trades: Trade[], rules: Rule[], monthlyAnalyses?: MonthlyAnalysis[], constitutionMode?: boolean }) {
     const { filterTrades } = useTradeFilter()
     const [searchTerm, setSearchTerm] = useState("")
     const [startDate, setStartDate] = useState<string>("")
@@ -119,7 +119,9 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Tr
             return;
         }
 
-        let csvContent = "Date,MainSymbol,Type,LegNo,LegSymbol,LegType,Entry,Exit,Quantity,Fees,TotalPnL,Analysis,MonthlyAnalysis,TradeMode,TradeQuality,Setup,Sector,MarketLight,BaseWeeks,VolumeRatio,Trigger,Limit,Stop,RPerShare,PlannedRisk,ResultsDate,ExitDate,ExitReason,ResultR,Checklist,ProcessGrade,RepeatNote\n";
+        const breakoutHeader = constitutionMode ? ",Setup,Sector,MarketLight,BaseWeeks,VolumeRatio,Trigger,Limit,Stop,RPerShare,PlannedRisk,ResultsDate,ExitDate,ExitReason,ResultR,Checklist,ProcessGrade,RepeatNote" : "";
+        const extra = (t: Trade) => (constitutionMode ? `,${breakoutColumns(t).join(",")}` : "");
+        let csvContent = `Date,MainSymbol,Type,LegNo,LegSymbol,LegType,Entry,Exit,Quantity,Fees,TotalPnL,Analysis,MonthlyAnalysis,TradeMode,TradeQuality${breakoutHeader}\n`;
         
         // Group filtered trades by month for MonthlyAnalysis column
         filteredTrades.forEach(t => {
@@ -131,12 +133,12 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Tr
             const tradeQuality = t.isPaper ? "N/A" : (t.tradeQuality ? t.tradeQuality.charAt(0).toUpperCase() + t.tradeQuality.slice(1) : "Acceptable");
 
             if (t.isBasket && t.legs) {
-                csvContent += `${t.date},"${t.symbol}",BASKET,-,-,-,-,-,-,${t.fees},${t.pnl},${safeAnalysis},${safeMonthlyAnalysis},${tradeMode},${tradeQuality},${breakoutColumns(t).join(",")}\n`;
+                csvContent += `${t.date},"${t.symbol}",BASKET,-,-,-,-,-,-,${t.fees},${t.pnl},${safeAnalysis},${safeMonthlyAnalysis},${tradeMode},${tradeQuality}${extra(t)}\n`;
                 t.legs.forEach((l, i) => {
                     csvContent += `${t.date},"${t.symbol}",BASKET,${i+1},"${l.symbol || '-'}",${l.type.toUpperCase()},${l.entryPrice},${l.exitPrice},${l.quantity},${l.fees},-,-,,\n`;
                 });
             } else {
-                csvContent += `${t.date},"${t.symbol}",${t.type.toUpperCase()},-,-,-,${t.entryPrice},${t.exitPrice},${t.quantity},${t.fees},${t.pnl},${safeAnalysis},${safeMonthlyAnalysis},${tradeMode},${tradeQuality},${breakoutColumns(t).join(",")}\n`;
+                csvContent += `${t.date},"${t.symbol}",${t.type.toUpperCase()},-,-,-,${t.entryPrice},${t.exitPrice},${t.quantity},${t.fees},${t.pnl},${safeAnalysis},${safeMonthlyAnalysis},${tradeMode},${tradeQuality}${extra(t)}\n`;
             }
         });
 

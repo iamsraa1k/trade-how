@@ -1,9 +1,11 @@
 'use server'
 
-import { getTrades, saveTrade, updateTrade, deleteTrade, getRules, addRule, deleteRule, getMonthlyAnalyses, saveMonthlyAnalysis, saveConstitution, addBreaches, deleteBreach, addImpulse, updateImpulse, deleteImpulse } from '@/lib/db';
+import { getTrades, saveTrade, updateTrade, deleteTrade, getRules, addRule, deleteRule, getMonthlyAnalyses, saveMonthlyAnalysis, getConstitution, saveConstitution, addBreaches, deleteBreach, addImpulse, updateImpulse, deleteImpulse } from '@/lib/db';
 import { getAutomation, saveAutomation, getLatestScan } from '@/lib/db';
 import type { Trade, ConstitutionSettings } from '@/lib/db';
-import { analyzeSymbol, automationUsers, isAutomationUser } from '@/features/automation/lib/pipeline';
+import { analyzeSymbol } from '@/features/automation/lib/pipeline';
+import { istToday } from '@/features/automation/lib/marketData';
+import { canUseConstitution } from '@/lib/access';
 import { findChatForCode, getBotUsername, sendMessage } from '@/features/automation/lib/telegram';
 import { randomUUID } from 'crypto';
 import { revalidatePath } from 'next/cache';
@@ -66,7 +68,7 @@ const BreachSchema = z.object({
 const GRADE_TO_QUALITY = { A: "flawless", B: "acceptable", C: "violation" } as const;
 
 // Shared by add and update: turns the submitted form into the stored trade shape.
-function parseTradeForm(formData: FormData) {
+function parseTradeForm(formData: FormData, constitutionAllowed: boolean) {
     const formObject: Record<string, any> = Object.fromEntries(formData.entries());
     formObject.rules = formData.getAll('rules');
     formObject.checklist = formData.getAll('checklist');
@@ -85,7 +87,7 @@ function parseTradeForm(formData: FormData) {
     }
 
     const data = parsed.data;
-    const isBreakout = data.setup === "momentum_breakout";
+    const isBreakout = constitutionAllowed && data.setup === "momentum_breakout";
     const isOpen = isBreakout && data.status === "open";
     const grade = isBreakout && data.processGrade ? data.processGrade : null;
 
@@ -132,7 +134,7 @@ function parseTradeForm(formData: FormData) {
     }
 
     let breaches: z.infer<typeof BreachSchema>[] = [];
-    if (formObject.breachesData) {
+    if (isBreakout && formObject.breachesData) {
         const parsedBreaches = z.array(BreachSchema).safeParse(JSON.parse(formObject.breachesData as string));
         if (parsedBreaches.success) breaches = parsedBreaches.data;
     }
@@ -147,6 +149,15 @@ async function getAuthenticatedUser() {
         redirect("/login");
     }
     return session.user.email;
+}
+
+// Constitution and automation actions are only for accounts listed in CONSTITUTION_EMAILS.
+async function requireConstitutionUser() {
+    const userId = await getAuthenticatedUser();
+    if (!canUseConstitution(userId)) {
+        throw new Error("Constitution mode isn't available for this account");
+    }
+    return userId;
 }
 
 export async function fetchTrades() {
@@ -189,7 +200,7 @@ export async function addNewTrade(formData: FormData) {
     try {
         const userId = await getAuthenticatedUser();
 
-        const parsed = parseTradeForm(formData);
+        const parsed = parseTradeForm(formData, canUseConstitution(userId));
         if ('error' in parsed) {
             return { success: false, error: parsed.error };
         }
@@ -210,7 +221,7 @@ export async function updateTradeAction(id: string, formData: FormData) {
     try {
         const userId = await getAuthenticatedUser();
 
-        const parsed = parseTradeForm(formData);
+        const parsed = parseTradeForm(formData, canUseConstitution(userId));
         if ('error' in parsed) {
             return { success: false, error: parsed.error };
         }
@@ -279,11 +290,12 @@ const ConstitutionSchema = z.object({
         failedRuns: z.number().int().min(0),
     }).nullable().optional(),
     whyTrading: z.string().max(5000).optional(),
+    enabled: z.boolean().optional(),
 });
 
 export async function saveConstitutionAction(data: Partial<Omit<ConstitutionSettings, 'userId' | 'updatedAt'>>) {
     try {
-        const userId = await getAuthenticatedUser();
+        const userId = await requireConstitutionUser();
         const parsed = ConstitutionSchema.safeParse(data);
         if (!parsed.success) {
             return { success: false, error: parsed.error.issues[0]?.message || "Invalid settings" };
@@ -299,7 +311,7 @@ export async function saveConstitutionAction(data: Partial<Omit<ConstitutionSett
 
 export async function logBreachAction(input: { date: string; level: number; code: string; note?: string; tradeId?: string | null }) {
     try {
-        const userId = await getAuthenticatedUser();
+        const userId = await requireConstitutionUser();
         const parsed = BreachSchema.safeParse(input);
         if (!parsed.success) {
             return { success: false, error: parsed.error.issues[0]?.message || "Invalid breach" };
@@ -315,7 +327,7 @@ export async function logBreachAction(input: { date: string; level: number; code
 
 export async function deleteBreachAction(id: string) {
     try {
-        const userId = await getAuthenticatedUser();
+        const userId = await requireConstitutionUser();
         await deleteBreach(id, userId);
         revalidatePath('/', 'layout');
         return { success: true };
@@ -334,7 +346,7 @@ const ImpulseSchema = z.object({
 
 export async function addImpulseAction(input: { date: string; symbol: string; reason: string; refPrice?: number | null }) {
     try {
-        const userId = await getAuthenticatedUser();
+        const userId = await requireConstitutionUser();
         const parsed = ImpulseSchema.safeParse(input);
         if (!parsed.success) {
             return { success: false, error: parsed.error.issues[0]?.message || "Invalid entry" };
@@ -350,7 +362,7 @@ export async function addImpulseAction(input: { date: string; symbol: string; re
 
 export async function updateImpulseAction(id: string, laterPrice: number | null) {
     try {
-        const userId = await getAuthenticatedUser();
+        const userId = await requireConstitutionUser();
         if (laterPrice !== null && !(laterPrice > 0)) {
             return { success: false, error: "Price must be positive" };
         }
@@ -365,7 +377,7 @@ export async function updateImpulseAction(id: string, laterPrice: number | null)
 
 export async function deleteImpulseAction(id: string) {
     try {
-        const userId = await getAuthenticatedUser();
+        const userId = await requireConstitutionUser();
         await deleteImpulse(id, userId);
         revalidatePath('/', 'layout');
         return { success: true };
@@ -380,13 +392,12 @@ export async function deleteImpulseAction(id: string) {
 // ---------------------------------------------------------------------------
 
 export async function getAutomationOverviewAction() {
-    const userId = await getAuthenticatedUser();
-    const [automation, latestScan] = await Promise.all([getAutomation(userId), getLatestScan().catch(() => null)]);
+    const userId = await requireConstitutionUser();
+    const [automation, latestScan, constitution] = await Promise.all([getAutomation(userId), getLatestScan().catch(() => null), getConstitution(userId)]);
     const tg = automation?.telegram;
     return {
         account: userId,
-        enabled: isAutomationUser(userId),
-        anyUsersConfigured: automationUsers().length > 0,
+        enabled: !!constitution?.enabled,
         cronSecretSet: !!process.env.CRON_SECRET,
         telegram: {
             hasToken: !!tg?.botToken,
@@ -405,7 +416,7 @@ export async function getAutomationOverviewAction() {
 
 export async function saveTelegramBotAction(token: string) {
     try {
-        const userId = await getAuthenticatedUser();
+        const userId = await requireConstitutionUser();
         const clean = token.trim();
         if (!/^\d+:[\w-]{30,}$/.test(clean)) return { success: false, error: "That doesn't look like a bot token from @BotFather." };
         const botUsername = await getBotUsername(clean);
@@ -420,7 +431,7 @@ export async function saveTelegramBotAction(token: string) {
 
 export async function linkTelegramAction() {
     try {
-        const userId = await getAuthenticatedUser();
+        const userId = await requireConstitutionUser();
         const tg = (await getAutomation(userId))?.telegram;
         if (!tg?.botToken || !tg.linkCode) return { success: false, error: "Save your bot token first." };
         const chatId = await findChatForCode(tg.botToken, tg.linkCode);
@@ -436,7 +447,7 @@ export async function linkTelegramAction() {
 
 export async function sendTelegramTestAction() {
     try {
-        const userId = await getAuthenticatedUser();
+        const userId = await requireConstitutionUser();
         const tg = (await getAutomation(userId))?.telegram;
         if (!tg?.botToken || !tg.chatId) return { success: false, error: "Link Telegram first." };
         await sendMessage(tg.botToken, tg.chatId, "🔔 Test alert from TradeHow. If you can read this, alerts work.");
@@ -449,7 +460,7 @@ export async function sendTelegramTestAction() {
 
 export async function disconnectTelegramAction() {
     try {
-        const userId = await getAuthenticatedUser();
+        const userId = await requireConstitutionUser();
         await saveAutomation(userId, { telegram: null });
         return { success: true };
     } catch (error) {
@@ -460,7 +471,7 @@ export async function disconnectTelegramAction() {
 
 export async function analyzeSymbolAction(symbol: string, date: string | null) {
     try {
-        await getAuthenticatedUser();
+        await requireConstitutionUser();
         if (!symbol.trim()) return { success: false, error: "Enter a stock symbol first." };
         const result = await analyzeSymbol(symbol, date);
         if ("error" in result) return { success: false, error: result.error };
@@ -468,5 +479,24 @@ export async function analyzeSymbolAction(symbol: string, date: string | null) {
     } catch (error) {
         console.error("Failed to analyse symbol", error);
         return { success: false, error: "Market data is unavailable right now. Try again, or enter the values by hand." };
+    }
+}
+
+export async function setConstitutionModeAction(enabled: boolean) {
+    try {
+        const userId = await requireConstitutionUser();
+        const existing = await getConstitution(userId);
+        // The start date is fixed the first time the mode is switched on, so older trades never count.
+        const data: Partial<ConstitutionSettings> = { enabled };
+        if (enabled && !existing?.startDate) {
+            data.startDate = istToday();
+            data.phase = 0;
+        }
+        const saved = await saveConstitution(userId, data);
+        revalidatePath('/', 'layout');
+        return { success: true, data: saved };
+    } catch (error) {
+        console.error("Failed to switch constitution mode", error);
+        return { success: false, error: error instanceof Error ? error.message : "Failed to switch constitution mode" };
     }
 }

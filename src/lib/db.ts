@@ -225,6 +225,7 @@ export interface ConstitutionSettings {
     checks: Record<string, boolean>;
     backtest?: BacktestResult | null;
     whyTrading?: string;
+    enabled?: boolean;              // constitution mode switch
     updatedAt?: string;
 }
 

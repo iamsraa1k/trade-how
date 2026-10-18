@@ -13,6 +13,7 @@ import { authOptions } from "@/lib/auth";
 import { getTrades, getRules, getMonthlyAnalyses, getConstitution, getBreaches, getImpulses } from "@/lib/db";
 import type { Trade, Rule, MonthlyAnalysis, ConstitutionSettings, Breach, Impulse } from "@/lib/db";
 import { DataProvider } from "@/shared/context/DataContext";
+import { canUseConstitution } from "@/lib/access";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -35,14 +36,17 @@ export default async function RootLayout({
   let breaches: Breach[] = [];
   let impulses: Impulse[] = [];
   
+  const constitutionAllowed = canUseConstitution(session?.user?.email);
+
   if (session?.user?.email) {
+      const email = session.user.email;
       [trades, rules, analyses, constitution, breaches, impulses] = await Promise.all([
-          getTrades(session.user.email),
-          getRules(session.user.email),
-          getMonthlyAnalyses(session.user.email),
-          getConstitution(session.user.email),
-          getBreaches(session.user.email),
-          getImpulses(session.user.email)
+          getTrades(email),
+          getRules(email),
+          getMonthlyAnalyses(email),
+          constitutionAllowed ? getConstitution(email) : Promise.resolve(null),
+          constitutionAllowed ? getBreaches(email) : Promise.resolve([]),
+          constitutionAllowed ? getImpulses(email) : Promise.resolve([])
       ]);
   }
 
@@ -80,6 +84,7 @@ export default async function RootLayout({
               initialConstitution={constitution}
               initialBreaches={breaches}
               initialImpulses={impulses}
+              constitutionAllowed={constitutionAllowed}
             >
               <SplashScreen>
                 <MainLayout>

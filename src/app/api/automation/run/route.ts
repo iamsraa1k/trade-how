@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import { isAutomationUser, runDaily } from "@/features/automation/lib/pipeline";
+import { runDaily } from "@/features/automation/lib/pipeline";
+import { canUseConstitution } from "@/lib/access";
+import { getConstitution } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -11,7 +13,9 @@ export async function POST() {
     const session = await getServerSession(authOptions);
     const email = session?.user?.email;
     if (!email) return NextResponse.json({ error: "Sign in first" }, { status: 401 });
-    if (!isAutomationUser(email)) return NextResponse.json({ error: "Automation isn't enabled for this account" }, { status: 403 });
+    if (!canUseConstitution(email) || !(await getConstitution(email))?.enabled) {
+        return NextResponse.json({ error: "Constitution mode isn't on for this account" }, { status: 403 });
+    }
     try {
         const report = await runDaily([email], { force: true });
         const mine = report.users[0];

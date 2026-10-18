@@ -15,17 +15,18 @@ import {
 import { stepPaper, type PaperEvent, type PaperState } from "./paperEngine"
 import { analyzeStock, emaSeries, indexOnOrBefore, marketLight, type Candle, type MarketLight, type StockSnapshot } from "./scanner"
 import { escapeHtml, sendMessage } from "./telegram"
+import { constitutionEmails } from "@/lib/access"
 import { checkOpenPosition, type PositionCheck } from "./tracking"
 
 // ---------------------------------------------------------------------------
-// Who automation runs for: the Google sign-in emails listed in AUTOMATION_EMAILS (comma-separated).
+// Who automation runs for: accounts in CONSTITUTION_EMAILS that have constitution mode switched on.
 // ---------------------------------------------------------------------------
 
-export function automationUsers(): string[] {
-    return (process.env.AUTOMATION_EMAILS || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean)
+export async function activeConstitutionUsers(): Promise<string[]> {
+    const emails = constitutionEmails()
+    const settings = await Promise.all(emails.map(email => getConstitution(email)))
+    return emails.filter((_, i) => settings[i]?.enabled)
 }
-
-export const isAutomationUser = (email: string) => automationUsers().includes(email.trim().toLowerCase())
 
 const appUrl = () => (process.env.APP_URL || process.env.NEXTAUTH_URL || "").replace(/\/$/, "")
 

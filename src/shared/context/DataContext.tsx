@@ -10,6 +10,9 @@ interface DataContextType {
     constitution: ConstitutionSettings | null
     breaches: Breach[]
     impulses: Impulse[]
+    // Constitution features exist only for allowed accounts, and show only while the mode is switched on.
+    constitutionAllowed: boolean
+    constitutionMode: boolean
     setTrades: React.Dispatch<React.SetStateAction<Trade[]>>
     setRules: React.Dispatch<React.SetStateAction<Rule[]>>
     setMonthlyAnalyses: React.Dispatch<React.SetStateAction<MonthlyAnalysis[]>>
@@ -27,7 +30,8 @@ export function DataProvider({
     initialMonthlyAnalyses,
     initialConstitution,
     initialBreaches,
-    initialImpulses
+    initialImpulses,
+    constitutionAllowed = false
 }: { 
     children: React.ReactNode, 
     initialTrades: Trade[], 
@@ -35,7 +39,8 @@ export function DataProvider({
     initialMonthlyAnalyses: MonthlyAnalysis[],
     initialConstitution: ConstitutionSettings | null,
     initialBreaches: Breach[],
-    initialImpulses: Impulse[]
+    initialImpulses: Impulse[],
+    constitutionAllowed?: boolean
 }) {
     const [trades, setTrades] = useState<Trade[]>(initialTrades)
     const [rules, setRules] = useState<Rule[]>(initialRules)
@@ -72,6 +77,7 @@ export function DataProvider({
     return (
         <DataContext.Provider value={{
             trades, rules, monthlyAnalyses, constitution, breaches, impulses,
+            constitutionAllowed, constitutionMode: constitutionAllowed && !!constitution?.enabled,
             setTrades, setRules, setMonthlyAnalyses, setConstitution, setBreaches, setImpulses
         }}>
             {children}

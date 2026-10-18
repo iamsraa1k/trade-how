@@ -155,7 +155,7 @@ export function resolveSettings(s: ConstitutionSettings | null, today = todayISO
         checks: s?.checks || {},
         backtest: s?.backtest || null,
         whyTrading: s?.whyTrading || "",
-        isNew: !s,
+        isNew: !s?.equityHistory?.length,
     }
 }
 

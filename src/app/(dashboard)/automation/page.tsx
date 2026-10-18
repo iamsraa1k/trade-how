@@ -2,6 +2,7 @@
 
 import { AutomationView } from "@/features/automation/components/AutomationView";
 import { useData } from "@/shared/context/DataContext";
+import { ConstitutionGate } from "@/features/constitution/components/ConstitutionGate";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -22,12 +23,14 @@ export default function AutomationPage() {
   }
 
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <h1 className="page-title">Automation</h1>
-        <p className="page-description">Nightly scan, paper trading, position checks and Telegram alerts — all from free end-of-day data.</p>
+    <ConstitutionGate>
+      <div className="page-container">
+        <div className="page-header">
+          <h1 className="page-title">Automation</h1>
+          <p className="page-description">Nightly scan, paper trading, position checks and Telegram alerts — all from free end-of-day data.</p>
+        </div>
+        <AutomationView constitution={constitution} trades={trades} breaches={breaches} />
       </div>
-      <AutomationView constitution={constitution} trades={trades} breaches={breaches} />
-    </div>
+    </ConstitutionGate>
   );
 }
