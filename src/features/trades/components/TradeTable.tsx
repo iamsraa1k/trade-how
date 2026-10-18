@@ -11,8 +11,49 @@ import { Label } from "@/shared/components/ui/label"
 import { deleteTradeAction } from "@/app/actions"
 import { toast } from "sonner"
 import { useTradeFilter } from "@/features/trades/context/TradeFilterContext"
+import { isBreakout, tradeLevels } from "@/features/constitution/lib/engine"
+import { CHECKLIST, EXIT_REASONS } from "@/features/constitution/lib/rules"
+import Link from "next/link"
 
-export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Trade[], rules: Rule[], monthlyAnalyses?: MonthlyAnalysis[] }) {
+const exitLabel = (reason?: string | null) => EXIT_REASONS.find(r => r.value === reason)?.label || ""
+
+// Momentum Breakout journal columns for the CSV export (empty for other trades).
+function breakoutColumns(t: Trade): string[] {
+    if (!isBreakout(t)) return Array(17).fill("")
+    const lv = tradeLevels(t)
+    const quote = (v?: string | null) => `"${(v || "").replace(/"/g, '""')}"`
+    return [
+        "Momentum Breakout",
+        quote(t.sector),
+        t.marketLight || "",
+        t.baseWeeks?.toString() || "",
+        t.volumeRatio?.toString() || "",
+        t.trigger?.toString() || "",
+        t.limitPrice?.toString() || "",
+        t.stopPrice?.toString() || "",
+        lv.rPerShare?.toFixed(2) || "",
+        lv.plannedRisk?.toFixed(0) || "",
+        t.resultsDate || "",
+        t.exitDate || "",
+        quote(exitLabel(t.exitReason)),
+        lv.resultR?.toFixed(2) || "",
+        quote((t.checklist || []).join(" | ")),
+        t.processGrade || "",
+        quote(t.repeatNote),
+    ]
+}
+
+function ResultR({ trade }: { trade: Trade }) {
+    const r = tradeLevels(trade).resultR
+    if (r === null) return null
+    return (
+        <span className={`block font-bold font-mono ${r >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+            {r >= 0 ? '+' : ''}{r.toFixed(2)}R
+        </span>
+    )
+}
+
+export function TradeTable({ trades, rules, monthlyAnalyses = [], constitutionMode = false }: { trades: Trade[], rules: Rule[], monthlyAnalyses?: MonthlyAnalysis[], constitutionMode?: boolean }) {
     const { filterTrades } = useTradeFilter()
     const [searchTerm, setSearchTerm] = useState("")
     const [startDate, setStartDate] = useState<string>("")
@@ -20,6 +61,7 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Tr
 
     // Apply global trade filter before local search/date filters
     const globallyFilteredTrades = useMemo(() => filterTrades(trades), [trades, filterTrades])
+    const openCount = useMemo(() => trades.filter(t => t.status === "open").length, [trades])
     
     // Lazy loading state
     const [visibleDays, setVisibleDays] = useState(10)
@@ -77,7 +119,9 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Tr
             return;
         }
 
-        let csvContent = "Date,MainSymbol,Type,LegNo,LegSymbol,LegType,Entry,Exit,Quantity,Fees,TotalPnL,Analysis,MonthlyAnalysis,TradeMode,TradeQuality\n";
+        const breakoutHeader = constitutionMode ? ",Setup,Sector,MarketLight,BaseWeeks,VolumeRatio,Trigger,Limit,Stop,RPerShare,PlannedRisk,ResultsDate,ExitDate,ExitReason,ResultR,Checklist,ProcessGrade,RepeatNote" : "";
+        const extra = (t: Trade) => (constitutionMode ? `,${breakoutColumns(t).join(",")}` : "");
+        let csvContent = `Date,MainSymbol,Type,LegNo,LegSymbol,LegType,Entry,Exit,Quantity,Fees,TotalPnL,Analysis,MonthlyAnalysis,TradeMode,TradeQuality${breakoutHeader}\n`;
         
         // Group filtered trades by month for MonthlyAnalysis column
         filteredTrades.forEach(t => {
@@ -89,12 +133,12 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Tr
             const tradeQuality = t.isPaper ? "N/A" : (t.tradeQuality ? t.tradeQuality.charAt(0).toUpperCase() + t.tradeQuality.slice(1) : "Acceptable");
 
             if (t.isBasket && t.legs) {
-                csvContent += `${t.date},"${t.symbol}",BASKET,-,-,-,-,-,-,${t.fees},${t.pnl},${safeAnalysis},${safeMonthlyAnalysis},${tradeMode},${tradeQuality}\n`;
+                csvContent += `${t.date},"${t.symbol}",BASKET,-,-,-,-,-,-,${t.fees},${t.pnl},${safeAnalysis},${safeMonthlyAnalysis},${tradeMode},${tradeQuality}${extra(t)}\n`;
                 t.legs.forEach((l, i) => {
                     csvContent += `${t.date},"${t.symbol}",BASKET,${i+1},"${l.symbol || '-'}",${l.type.toUpperCase()},${l.entryPrice},${l.exitPrice},${l.quantity},${l.fees},-,-,,\n`;
                 });
             } else {
-                csvContent += `${t.date},"${t.symbol}",${t.type.toUpperCase()},-,-,-,${t.entryPrice},${t.exitPrice},${t.quantity},${t.fees},${t.pnl},${safeAnalysis},${safeMonthlyAnalysis},${tradeMode},${tradeQuality}\n`;
+                csvContent += `${t.date},"${t.symbol}",${t.type.toUpperCase()},-,-,-,${t.entryPrice},${t.exitPrice},${t.quantity},${t.fees},${t.pnl},${safeAnalysis},${safeMonthlyAnalysis},${tradeMode},${tradeQuality}${extra(t)}\n`;
             }
         });
 
@@ -181,6 +225,11 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Tr
                     if (!trade.isBasket) {
                         doc.text(`Qty: ${trade.quantity} | En: ${trade.entryPrice} | Ex: ${trade.exitPrice} | Fee: ${trade.fees}`, 14, currentY);
                         currentY += 5;
+                        if (isBreakout(trade)) {
+                            const lv = tradeLevels(trade);
+                            doc.text(`Momentum Breakout | ${trade.sector || "-"} | Stop: ${trade.stopPrice ?? "-"} | Risk: ${lv.plannedRisk?.toFixed(0) ?? "-"} | Result: ${lv.resultR !== null ? `${lv.resultR.toFixed(2)}R` : "-"} | Exit: ${exitLabel(trade.exitReason) || "-"} | Grade ${trade.processGrade || "-"} | Checklist ${(trade.checklist || []).length}/${CHECKLIST.length}`, 14, currentY);
+                            currentY += 5;
+                        }
                     } else {
                         if (trade.legs) {
                             trade.legs.forEach((leg: any, i: number) => {
@@ -284,6 +333,13 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Tr
                 </div>
             </div>
 
+            {openCount > 0 && (
+                <div className="rounded-2xl border border-sky-200 dark:border-sky-900/60 bg-sky-50/70 dark:bg-sky-950/20 p-4 text-sm text-sky-900 dark:text-sky-200">
+                    {openCount} open Momentum Breakout position{openCount === 1 ? " isn't" : "s aren't"} listed here until closed.{" "}
+                    <Link href="/routine" className="font-semibold underline">Manage them in the Evening Routine</Link>.
+                </div>
+            )}
+
             <div className="space-y-10">
                 {visibleGroups.map(([date, dayTrades]) => {
                     const dailyPnl = dayTrades.reduce((acc, t) => acc + t.pnl, 0);
@@ -317,20 +373,30 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Tr
                                                                 PAPER
                                                             </div>
                                                         )}
-                                                        {!trade.isPaper && trade.tradeQuality === 'flawless' && (
+                                                        {trade.auto && (
+                                                            <div className="px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                                                                AUTO
+                                                            </div>
+                                                        )}
+                                                        {isBreakout(trade) && trade.processGrade && (
+                                                            <div className={`px-2.5 py-1 rounded-full text-xs font-semibold ${trade.processGrade === 'A' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : trade.processGrade === 'C' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'}`}>
+                                                                GRADE {trade.processGrade}
+                                                            </div>
+                                                        )}
+                                                        {!trade.isPaper && !isBreakout(trade) && trade.tradeQuality === 'flawless' && (
                                                             <div className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 flex items-center gap-1">
                                                                 <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
                                                                 ⭐ FLAWLESS
                                                             </div>
                                                         )}
-                                                        {!trade.isPaper && trade.tradeQuality === 'violation' && (
+                                                        {!trade.isPaper && !isBreakout(trade) && trade.tradeQuality === 'violation' && (
                                                             <div className="px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 flex items-center gap-1">
                                                                 <ThumbsDown className="h-3 w-3" />
                                                                 VIOLATION
                                                             </div>
                                                         )}
                                                         <div className={`px-2.5 py-1 rounded-full text-xs font-semibold ${trade.isBasket ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' : trade.type === 'buy' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
-                                                            {trade.isBasket ? "BASKET" : trade.type.toUpperCase()}
+                                                            {trade.isBasket ? "BASKET" : isBreakout(trade) ? "MB" : trade.type.toUpperCase()}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -340,7 +406,8 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Tr
                                                         {trade.pnl > 0 ? '+' : ''}{trade.pnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                                                     </div>
                                                     {!trade.isBasket && (
-                                                        <div className="text-sm text-muted-foreground">
+                                                        <div className="text-sm text-muted-foreground text-right">
+                                                            {isBreakout(trade) && <ResultR trade={trade} />}
                                                             Qty: {trade.quantity}
                                                         </div>
                                                     )}
@@ -374,6 +441,22 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [] }: { trades: Tr
                                                                 <span className="text-muted-foreground">Fees</span>
                                                                 <span className="font-medium">₹{trade.fees}</span>
                                                             </div>
+                                                            {isBreakout(trade) && (
+                                                                <>
+                                                                    <div className="flex justify-between">
+                                                                        <span className="text-muted-foreground">Stop</span>
+                                                                        <span className="font-medium">{trade.stopPrice ? `₹${trade.stopPrice}` : "—"}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between">
+                                                                        <span className="text-muted-foreground">Exit reason</span>
+                                                                        <span className="font-medium">{exitLabel(trade.exitReason) || "—"}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between">
+                                                                        <span className="text-muted-foreground">Checklist</span>
+                                                                        <span className="font-medium">{(trade.checklist || []).length} / {CHECKLIST.length}</span>
+                                                                    </div>
+                                                                </>
+                                                            )}
                                                         </>
                                                     )}
                                                 </div>

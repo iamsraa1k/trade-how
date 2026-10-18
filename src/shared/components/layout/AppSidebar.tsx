@@ -1,16 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { LayoutDashboard, Calendar, List, CheckSquare, PlusCircle, FileText, TrendingUp, Layers } from "lucide-react";
+import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { LayoutDashboard, Calendar, List, CheckSquare, PlusCircle, FileText, TrendingUp, Layers, ScrollText, Moon, Gavel, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTradeFilter, TradeMode } from "@/features/trades/context/TradeFilterContext";
+import { Switch } from "@/shared/components/ui/switch";
+import { useData } from "@/shared/context/DataContext";
+import { setConstitutionModeAction } from "@/app/actions";
 
 const navItems = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Trade Log", href: "/trades", icon: List },
   { name: "Rules", href: "/rules", icon: CheckSquare },
   { name: "Monthly Analysis", href: "/monthly-analysis", icon: Calendar },
+];
+
+const constitutionItems = [
+  { name: "Constitution", href: "/constitution", icon: ScrollText },
+  { name: "Evening Routine", href: "/routine", icon: Moon },
+  { name: "Discipline", href: "/discipline", icon: Gavel },
+  { name: "Automation", href: "/automation", icon: Bot },
 ];
 
 const filterOptions: { mode: TradeMode; label: string; icon: React.ElementType; description: string }[] = [
@@ -21,7 +33,23 @@ const filterOptions: { mode: TradeMode; label: string; icon: React.ElementType; 
 
 export function AppSidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (val: boolean) => void }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { tradeMode, setTradeMode } = useTradeFilter();
+  const { constitutionAllowed, constitutionMode, setConstitution } = useData();
+  const [switching, setSwitching] = useState(false);
+
+  const toggleConstitutionMode = async (on: boolean) => {
+    setSwitching(true);
+    const result = await setConstitutionModeAction(on);
+    setSwitching(false);
+    if (!result.success || !result.data) {
+      toast.error(result.error || "Couldn't switch constitution mode");
+      return;
+    }
+    setConstitution(result.data);
+    toast.success(on ? "Constitution mode on" : "Constitution mode off");
+    if (!on && constitutionItems.some(item => item.href === pathname)) router.push("/");
+  };
 
   return (
     <>
@@ -79,6 +107,18 @@ export function AppSidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: 
           </div>
         </div>
 
+        {constitutionAllowed && (
+          <div className="px-4 pb-2">
+            <label className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/40 px-3 py-2.5 cursor-pointer shadow-sm">
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                <ScrollText className={cn("h-4 w-4", constitutionMode ? "text-indigo-500" : "text-muted-foreground")} />
+                Constitution mode
+              </span>
+              <Switch checked={constitutionMode} disabled={switching} onCheckedChange={toggleConstitutionMode} aria-label="Constitution mode" />
+            </label>
+          </div>
+        )}
+
         <nav className="p-4 space-y-2">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
@@ -97,6 +137,29 @@ export function AppSidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: 
               </Link>
             );
           })}
+
+          {constitutionMode && (
+          <div className="pt-4 mt-4 border-t space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-3 pb-1">Constitution</p>
+            {constitutionItems.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={() => setIsOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all hover:bg-muted",
+                    isActive ? "bg-muted text-primary" : "text-muted-foreground"
+                  )}
+                >
+                  <item.icon className="h-5 w-5" />
+                  {item.name}
+                </Link>
+              );
+            })}
+          </div>
+          )}
 
           <div className="pt-4 mt-4 border-t">
             <Link

@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useMemo } from "react"
-import type { Trade, Rule } from "@/lib/db"
+import type { Trade, Rule, ConstitutionSettings, Breach } from "@/lib/db"
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts"
 import { motion } from "framer-motion"
@@ -11,10 +11,13 @@ import { Input } from "@/shared/components/ui/input"
 import { CalendarView } from "@/features/calendar/components/CalendarView"
 import { useTradeFilter } from "@/features/trades/context/TradeFilterContext"
 import { FileText } from "lucide-react"
+import { ConstitutionStatusPanel } from "@/features/constitution/components/ConstitutionStatusPanel"
+import { computeStatus } from "@/features/constitution/lib/engine"
 
-export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] }) {
+export function Dashboard({ trades, rules, constitution = null, breaches = [], constitutionMode = false }: { trades: Trade[], rules: Rule[], constitution?: ConstitutionSettings | null, breaches?: Breach[], constitutionMode?: boolean }) {
     const { tradeMode, filterTrades } = useTradeFilter()
     const visibleTrades = filterTrades(trades)
+    const constitutionStatus = useMemo(() => computeStatus(constitution, trades, breaches), [constitution, trades, breaches])
 
     const [currentMonth, setCurrentMonth] = useState(new Date())
     const [customStartDate, setCustomStartDate] = useState<string>("")
@@ -103,6 +106,8 @@ export function Dashboard({ trades, rules }: { trades: Trade[], rules: Rule[] })
                     </div>
                 </div>
             </div>
+
+            {constitutionMode && <ConstitutionStatusPanel status={constitutionStatus} compact />}
 
             <div className="w-full pb-2">
                 <CalendarView trades={visibleTrades} rules={rules} currentMonth={currentMonth} onMonthChange={setCurrentMonth} />
