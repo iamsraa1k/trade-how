@@ -10,8 +10,8 @@ import NextTopLoader from 'nextjs-toploader';
 import { Inter } from "next/font/google";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import { getTrades, getRules, getMonthlyAnalyses } from "@/lib/db";
-import type { Trade, Rule, MonthlyAnalysis } from "@/lib/db";
+import { getTrades, getRules, getMonthlyAnalyses, getConstitution, getBreaches, getImpulses } from "@/lib/db";
+import type { Trade, Rule, MonthlyAnalysis, ConstitutionSettings, Breach, Impulse } from "@/lib/db";
 import { DataProvider } from "@/shared/context/DataContext";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
@@ -31,12 +31,18 @@ export default async function RootLayout({
   let trades: Trade[] = [];
   let rules: Rule[] = [];
   let analyses: MonthlyAnalysis[] = [];
+  let constitution: ConstitutionSettings | null = null;
+  let breaches: Breach[] = [];
+  let impulses: Impulse[] = [];
   
   if (session?.user?.email) {
-      [trades, rules, analyses] = await Promise.all([
+      [trades, rules, analyses, constitution, breaches, impulses] = await Promise.all([
           getTrades(session.user.email),
           getRules(session.user.email),
-          getMonthlyAnalyses(session.user.email)
+          getMonthlyAnalyses(session.user.email),
+          getConstitution(session.user.email),
+          getBreaches(session.user.email),
+          getImpulses(session.user.email)
       ]);
   }
 
@@ -67,7 +73,14 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           <Providers>
-            <DataProvider initialTrades={trades} initialRules={rules} initialMonthlyAnalyses={analyses}>
+            <DataProvider
+              initialTrades={trades}
+              initialRules={rules}
+              initialMonthlyAnalyses={analyses}
+              initialConstitution={constitution}
+              initialBreaches={breaches}
+              initialImpulses={impulses}
+            >
               <SplashScreen>
                 <MainLayout>
                   {children}

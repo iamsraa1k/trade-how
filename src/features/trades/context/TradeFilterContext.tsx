@@ -34,10 +34,12 @@ export function TradeFilterProvider({ children }: { children: React.ReactNode })
     }, [])
 
     const filterTrades = useCallback((trades: Trade[]): Trade[] => {
-        if (tradeMode === "all") return trades
-        if (tradeMode === "paper") return trades.filter(t => t.isPaper === true)
+        // Open swing positions have no realised P/L yet; they live on the Evening Routine page until closed.
+        const closed = trades.filter(t => t.status !== "open")
+        if (tradeMode === "all") return closed
+        if (tradeMode === "paper") return closed.filter(t => t.isPaper === true)
         // "regular" — trades without isPaper or with isPaper === false
-        return trades.filter(t => !t.isPaper)
+        return closed.filter(t => !t.isPaper)
     }, [tradeMode])
 
     // Prevent flash of wrong filter state during SSR/hydration
@@ -59,7 +61,7 @@ export function useTradeFilter() {
         return {
             tradeMode: "all" as TradeMode,
             setTradeMode: () => {},
-            filterTrades: (trades: Trade[]) => trades,
+            filterTrades: (trades: Trade[]) => trades.filter(t => t.status !== "open"),
         }
     }
     return context

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Calendar, List, CheckSquare, PlusCircle, FileText, TrendingUp, Layers } from "lucide-react";
+import { LayoutDashboard, Calendar, List, CheckSquare, PlusCircle, FileText, TrendingUp, Layers, ScrollText, Moon, Gavel } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTradeFilter, TradeMode } from "@/features/trades/context/TradeFilterContext";
 
@@ -11,6 +11,12 @@ const navItems = [
   { name: "Trade Log", href: "/trades", icon: List },
   { name: "Rules", href: "/rules", icon: CheckSquare },
   { name: "Monthly Analysis", href: "/monthly-analysis", icon: Calendar },
+];
+
+const constitutionItems = [
+  { name: "Constitution", href: "/constitution", icon: ScrollText },
+  { name: "Evening Routine", href: "/routine", icon: Moon },
+  { name: "Discipline", href: "/discipline", icon: Gavel },
 ];
 
 const filterOptions: { mode: TradeMode; label: string; icon: React.ElementType; description: string }[] = [
@@ -97,6 +103,27 @@ export function AppSidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: 
               </Link>
             );
           })}
+
+          <div className="pt-4 mt-4 border-t space-y-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-3 pb-1">Constitution</p>
+            {constitutionItems.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  onClick={() => setIsOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all hover:bg-muted",
+                    isActive ? "bg-muted text-primary" : "text-muted-foreground"
+                  )}
+                >
+                  <item.icon className="h-5 w-5" />
+                  {item.name}
+                </Link>
+              );
+            })}
+          </div>
 
           <div className="pt-4 mt-4 border-t">
             <Link

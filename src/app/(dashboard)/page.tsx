@@ -9,7 +9,7 @@ import { useEffect } from "react";
 export default function Home() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { trades, rules } = useData();
+  const { trades, rules, constitution, breaches } = useData();
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -28,7 +28,7 @@ export default function Home() {
         <p className="page-description">Summary of your trading metrics.</p>
       </div>
       
-      <Dashboard trades={trades} rules={rules} />
+      <Dashboard trades={trades} rules={rules} constitution={constitution} breaches={breaches} />
     </div>
   );
 }

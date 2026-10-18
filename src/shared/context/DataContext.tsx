@@ -1,15 +1,21 @@
 "use client"
 
 import React, { createContext, useContext, useState, useEffect } from "react"
-import type { Trade, Rule, MonthlyAnalysis } from "@/lib/db"
+import type { Trade, Rule, MonthlyAnalysis, ConstitutionSettings, Breach, Impulse } from "@/lib/db"
 
 interface DataContextType {
     trades: Trade[]
     rules: Rule[]
     monthlyAnalyses: MonthlyAnalysis[]
+    constitution: ConstitutionSettings | null
+    breaches: Breach[]
+    impulses: Impulse[]
     setTrades: React.Dispatch<React.SetStateAction<Trade[]>>
     setRules: React.Dispatch<React.SetStateAction<Rule[]>>
     setMonthlyAnalyses: React.Dispatch<React.SetStateAction<MonthlyAnalysis[]>>
+    setConstitution: React.Dispatch<React.SetStateAction<ConstitutionSettings | null>>
+    setBreaches: React.Dispatch<React.SetStateAction<Breach[]>>
+    setImpulses: React.Dispatch<React.SetStateAction<Impulse[]>>
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined)
@@ -18,16 +24,25 @@ export function DataProvider({
     children, 
     initialTrades, 
     initialRules, 
-    initialMonthlyAnalyses 
+    initialMonthlyAnalyses,
+    initialConstitution,
+    initialBreaches,
+    initialImpulses
 }: { 
     children: React.ReactNode, 
     initialTrades: Trade[], 
     initialRules: Rule[], 
-    initialMonthlyAnalyses: MonthlyAnalysis[] 
+    initialMonthlyAnalyses: MonthlyAnalysis[],
+    initialConstitution: ConstitutionSettings | null,
+    initialBreaches: Breach[],
+    initialImpulses: Impulse[]
 }) {
     const [trades, setTrades] = useState<Trade[]>(initialTrades)
     const [rules, setRules] = useState<Rule[]>(initialRules)
     const [monthlyAnalyses, setMonthlyAnalyses] = useState<MonthlyAnalysis[]>(initialMonthlyAnalyses)
+    const [constitution, setConstitution] = useState<ConstitutionSettings | null>(initialConstitution)
+    const [breaches, setBreaches] = useState<Breach[]>(initialBreaches)
+    const [impulses, setImpulses] = useState<Impulse[]>(initialImpulses)
 
     // Sync with server data when it changes (e.g. after revalidatePath)
     useEffect(() => {
@@ -42,8 +57,23 @@ export function DataProvider({
         setMonthlyAnalyses(initialMonthlyAnalyses)
     }, [initialMonthlyAnalyses])
 
+    useEffect(() => {
+        setConstitution(initialConstitution)
+    }, [initialConstitution])
+
+    useEffect(() => {
+        setBreaches(initialBreaches)
+    }, [initialBreaches])
+
+    useEffect(() => {
+        setImpulses(initialImpulses)
+    }, [initialImpulses])
+
     return (
-        <DataContext.Provider value={{ trades, rules, monthlyAnalyses, setTrades, setRules, setMonthlyAnalyses }}>
+        <DataContext.Provider value={{
+            trades, rules, monthlyAnalyses, constitution, breaches, impulses,
+            setTrades, setRules, setMonthlyAnalyses, setConstitution, setBreaches, setImpulses
+        }}>
             {children}
         </DataContext.Provider>
     )

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Save, Calculator, Plus, Trash2, FileText, Star, ThumbsDown, Minus } from "lucide-react"
+import { Save, Calculator, Plus, Trash2, FileText, Star, ThumbsDown, Minus, Rocket, Layers, ScrollText } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/shared/components/ui/button"
@@ -16,31 +16,45 @@ import { Input } from "@/shared/components/ui/input"
 import { Label } from "@/shared/components/ui/label"
 import { Textarea } from "@/shared/components/ui/textarea"
 import { Switch } from "@/shared/components/ui/switch"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/shared/components/ui/dialog"
 import { addNewTrade, updateTradeAction } from "@/app/actions"
 import { useRouter } from "next/navigation"
 import type { Rule } from "@/lib/db"
+import { useData } from "@/shared/context/DataContext"
+import { LADDER, SETUP_ID } from "@/features/constitution/lib/rules"
+import { computeStatus, evaluateTrade, suggestGrade, tradeLevels, type Grade } from "@/features/constitution/lib/engine"
+import { BreakoutChecklist, BreakoutFields, LevelBadge, RuleFindings, type BreakoutState } from "@/features/constitution/components/BreakoutFields"
 
 type TradeQuality = "flawless" | "acceptable" | "violation"
 
-export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialData?: any, id?: string }) {
+const toNumber = (v: string) => (v === "" || isNaN(parseFloat(v)) ? null : parseFloat(v))
+
+export function TradeForm({ rules, initialData, id, prefill }: { rules: Rule[], initialData?: any, id?: string, prefill?: Record<string, string> }) {
     const router = useRouter()
     const [isSubmitting, setIsSubmitting] = React.useState(false)
+    const { trades, constitution, breaches } = useData()
 
     // Form inputs state
     const [formData, setFormData] = React.useState({
         entry: initialData?.entryPrice?.toString() || "",
         exit: initialData?.exitPrice?.toString() || "",
-        quantity: initialData?.quantity?.toString() || "",
+        quantity: initialData?.quantity?.toString() || prefill?.qty || "",
         fees: initialData?.fees?.toString() || "",
         type: initialData?.type || "buy", // buy | sell
         pnl: initialData?.pnl?.toString() || "",
-        symbol: initialData?.symbol || "",
+        symbol: initialData?.symbol || prefill?.symbol?.toUpperCase() || "",
         analysis: initialData?.analysis || "",
         rules: initialData?.rules || ([] as string[]),
         date: initialData?.date || new Date().toISOString().split('T')[0]
     })
 
-    const [isPaper, setIsPaper] = React.useState<boolean>(!!initialData?.isPaper)
+    const [isPaper, setIsPaper] = React.useState<boolean>(!!initialData?.isPaper || prefill?.paper === "1")
     const [tradeQuality, setTradeQuality] = React.useState<TradeQuality>(initialData?.tradeQuality || "acceptable")
     const [qualityManuallySet, setQualityManuallySet] = React.useState(false)
 
@@ -60,6 +74,60 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
     })
 
     const [calculatedPnl, setCalculatedPnl] = React.useState<number | null>(null)
+
+    // Trading Constitution: Momentum Breakout is the default setup for new trades.
+    const [isBreakoutSetup, setIsBreakoutSetup] = React.useState<boolean>(initialData ? initialData.setup === SETUP_ID : true)
+    const [mb, setMbState] = React.useState<BreakoutState>(() => ({
+        status: initialData ? (initialData.status === "open" ? "open" : "closed") : "open",
+        sector: initialData?.sector || prefill?.sector || "",
+        marketLight: initialData?.marketLight || "",
+        baseWeeks: initialData?.baseWeeks?.toString() || "",
+        volumeRatio: initialData?.volumeRatio?.toString() || "",
+        trigger: initialData?.trigger?.toString() || prefill?.trigger || "",
+        limitPrice: initialData?.limitPrice?.toString() || prefill?.limit || "",
+        stopPrice: initialData?.stopPrice?.toString() || prefill?.stop || "",
+        resultsDate: initialData?.resultsDate || "",
+        exitDate: initialData?.exitDate || "",
+        exitReason: initialData?.exitReason || "",
+        checklist: initialData?.checklist || [],
+        processGrade: initialData?.processGrade || "A",
+        repeatNote: initialData?.repeatNote || "",
+    }))
+    const setMb = (patch: Partial<BreakoutState>) => setMbState(prev => ({ ...prev, ...patch }))
+    const [manualGrade, setManualGrade] = React.useState<Grade | null>(null)
+    const [pendingSubmit, setPendingSubmit] = React.useState<FormData | null>(null)
+
+    const constitutionStatus = React.useMemo(() => computeStatus(constitution, trades, breaches), [constitution, trades, breaches])
+    const levels = tradeLevels({
+        entryPrice: toNumber(formData.entry) || 0,
+        limitPrice: toNumber(mb.limitPrice),
+        stopPrice: toNumber(mb.stopPrice),
+        quantity: toNumber(formData.quantity) || 0,
+        date: formData.date,
+        status: mb.status,
+        pnl: toNumber(formData.pnl) ?? undefined,
+    })
+    const findings = isBreakoutSetup
+        ? evaluateTrade({
+            id,
+            date: formData.date,
+            isPaper,
+            status: mb.status,
+            sector: mb.sector,
+            marketLight: mb.marketLight,
+            baseWeeks: toNumber(mb.baseWeeks),
+            volumeRatio: toNumber(mb.volumeRatio),
+            entryPrice: toNumber(formData.entry),
+            limitPrice: toNumber(mb.limitPrice),
+            stopPrice: toNumber(mb.stopPrice),
+            quantity: toNumber(formData.quantity),
+            resultsDate: mb.resultsDate || null,
+            exitReason: mb.exitReason,
+        }, constitutionStatus, trades)
+        : []
+    const suggestedGrade = suggestGrade(mb.checklist, mb.status === "open", findings)
+    const effectiveGrade = manualGrade ?? suggestedGrade
+    const loggableBreaches = isBreakoutSetup && !isPaper ? findings.filter(f => f.level !== null) : []
 
     // Auto-detect trade quality based on rules checked (only if not manually overridden)
     React.useEffect(() => {
@@ -185,16 +253,38 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
     }
 
     const handleSubmit = async (data: FormData) => {
+        // Live trades that break the constitution go through a confirmation that logs the breaches.
+        if (loggableBreaches.length > 0) {
+            setPendingSubmit(data)
+            return
+        }
+        await submitTrade(data)
+    }
+
+    const submitTrade = async (data: FormData) => {
         setIsSubmitting(true)
         try {
-            data.append("isBasket", isBasket.toString())
             data.append("isPaper", isPaper.toString())
-            if (!isPaper) {
-                data.append("tradeQuality", tradeQuality)
-            }
-            if (isBasket) {
-                // If basket, send the parsed legs as JSON
-                formatiBasketLegs(data)
+            if (isBreakoutSetup) {
+                data.append("isBasket", "false")
+                data.set("processGrade", effectiveGrade)
+                if (loggableBreaches.length > 0) {
+                    data.append("breachesData", JSON.stringify(loggableBreaches.map(f => ({
+                        date: formData.date,
+                        level: f.level,
+                        code: f.code,
+                        note: `${formData.symbol.toUpperCase()}: ${f.message}`,
+                    }))))
+                }
+            } else {
+                data.append("isBasket", isBasket.toString())
+                if (!isPaper) {
+                    data.append("tradeQuality", tradeQuality)
+                }
+                if (isBasket) {
+                    // If basket, send the parsed legs as JSON
+                    formatiBasketLegs(data)
+                }
             }
             
             let result;
@@ -208,7 +298,10 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                 toast.error(result.error)
             } else {
                 toast.success(id ? "Trade updated successfully!" : "Trade saved successfully")
-                router.push("/")
+                if (loggableBreaches.length > 0) {
+                    toast.warning(`${loggableBreaches.length} breach${loggableBreaches.length === 1 ? "" : "es"} logged to your consequence ladder`)
+                }
+                router.push(isBreakoutSetup && mb.status === "open" ? "/routine" : "/")
                 router.refresh()
             }
         } catch (error) {
@@ -216,6 +309,7 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
             toast.error("Failed to save trade due to network error")
         } finally {
             setIsSubmitting(false)
+            setPendingSubmit(null)
         }
     }
     
@@ -271,6 +365,7 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                         {isPaper && <FileText className="h-6 w-6 text-teal-500" />}
                         {id ? "Edit Trade" : "Trade Entry"}
                         {isPaper && <span className="text-sm font-semibold bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-400 px-2.5 py-0.5 rounded-full ml-1">PAPER</span>}
+                        {isBreakoutSetup && <span className="text-xs font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 px-2.5 py-0.5 rounded-full ml-1">MOMENTUM BREAKOUT</span>}
                     </CardTitle>
                     
                     {/* Paper Trade Toggle */}
@@ -295,14 +390,63 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                 <CardDescription>
                     {isPaper 
                         ? "Record a simulated paper trade for practice and backtesting." 
-                        : id 
-                            ? "Modify your logged position." 
-                            : "Record your execution details. Multi-leg basket orders supported."
+                        : isBreakoutSetup
+                            ? "Journal the plan tonight, the fill when it arrives, and the exit when a written rule fires."
+                            : id 
+                                ? "Modify your logged position." 
+                                : "Record your execution details. Multi-leg basket orders supported."
                     }
                 </CardDescription>
             </CardHeader>
             <CardContent className="pt-6">
                 <form className="space-y-8" action={handleSubmit}>
+                    {/* Setup picker */}
+                    <div className="grid grid-cols-2 gap-3">
+                        {[
+                            { breakout: true, icon: Rocket, title: "Momentum Breakout", subtitle: "Constitution setup · CNC swing" },
+                            { breakout: false, icon: Layers, title: "Other / legacy", subtitle: "Intraday, F&O, baskets" },
+                        ].map(opt => (
+                            <button
+                                key={opt.title}
+                                type="button"
+                                onClick={() => {
+                                    setIsBreakoutSetup(opt.breakout)
+                                    if (opt.breakout) {
+                                        setFormData(prev => ({ ...prev, type: "buy" }))
+                                        setIsBasket(false)
+                                    }
+                                    setCalculatedPnl(null)
+                                }}
+                                className={`flex items-center gap-3 rounded-xl border-2 p-3 sm:p-4 text-left transition-all ${isBreakoutSetup === opt.breakout ? 'border-indigo-400 bg-indigo-50/70 dark:bg-indigo-950/30 dark:border-indigo-700 ring-1 ring-indigo-300/50' : 'border-border bg-card hover:border-muted-foreground/30'}`}
+                            >
+                                <opt.icon className={`h-5 w-5 shrink-0 ${isBreakoutSetup === opt.breakout ? 'text-indigo-600 dark:text-indigo-400' : 'text-muted-foreground'}`} />
+                                <span className="min-w-0">
+                                    <span className="block text-sm font-bold truncate">{opt.title}</span>
+                                    <span className="block text-[11px] text-muted-foreground truncate">{opt.subtitle}</span>
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+
+                    {!isBreakoutSetup && !isPaper && !id && (
+                        <div className="flex items-start gap-3 rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/20 p-4 text-sm text-amber-900 dark:text-amber-200">
+                            <ScrollText className="h-4 w-4 mt-0.5 shrink-0" />
+                            <p>Your constitution allows one live setup: Momentum Breakout, delivery only. A trade outside the setup is a Level 2 breach, and any F&amp;O trade is Level 4. Log it in the Discipline page if this is one.</p>
+                        </div>
+                    )}
+
+                    {isBreakoutSetup ? (
+                        <BreakoutFields
+                            formData={formData}
+                            onInput={handleInput}
+                            mb={mb}
+                            setMb={setMb}
+                            levels={levels}
+                            status={constitutionStatus}
+                            isPaper={isPaper}
+                            calculatedPnl={calculatedPnl}
+                        />
+                    ) : (<>
                     {/* Section 1: Asset Details */}
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
@@ -490,11 +634,24 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                             </div>
                         </div>
                     </div>
+                    </>)}
+
+                    {isBreakoutSetup && (
+                        <BreakoutChecklist
+                            mb={{ ...mb, processGrade: effectiveGrade }}
+                            setMb={setMb}
+                            suggested={suggestedGrade}
+                            gradeManuallySet={manualGrade !== null}
+                            onGradeChange={setManualGrade}
+                            onResetGrade={() => setManualGrade(null)}
+                            plannedRisk={levels.plannedRisk}
+                        />
+                    )}
 
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
                             <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2 text-primary">
-                                4. Psychology & Evidence
+                                {isBreakoutSetup ? "6. Notes & Evidence" : "4. Psychology & Evidence"}
                             </h3>
                         </div>
                         <div className="grid grid-cols-1 gap-6 bg-muted/20 p-4 rounded-xl border border-border/50">
@@ -511,7 +668,7 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                             </div>
 
                             <div className="space-y-3">
-                                <Label>Discipline / Custom Rules Followed</Label>
+                                <Label>{isBreakoutSetup ? "Your custom rules (optional)" : "Discipline / Custom Rules Followed"}</Label>
                                 {rules.length === 0 ? (
                                     <p className="text-sm text-muted-foreground border border-dashed p-4 rounded-xl bg-background/50">
                                         No custom rules added yet. Add rules in the dashboard to track your discipline!
@@ -541,7 +698,7 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                     </div>
 
                     {/* Section 5: Trade Quality — Only for Regular Trades */}
-                    {!isPaper && (
+                    {!isPaper && !isBreakoutSetup && (
                         <div className="space-y-4">
                             <div className="flex items-center justify-between">
                                 <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2 text-primary">
@@ -589,6 +746,8 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                         </div>
                     )}
 
+                    {isBreakoutSetup && <RuleFindings findings={findings} isPaper={isPaper} />}
+
                     <div className="flex justify-end pt-2">
                         <Button type="submit" disabled={isSubmitting} size="lg" className={`w-full md:w-auto transition-all font-bold px-10 py-6 text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 rounded-xl ${
                             isPaper
@@ -606,6 +765,34 @@ export function TradeForm({ rules, initialData, id }: { rules: Rule[], initialDa
                     </div>
                 </form>
             </CardContent>
+
+            <Dialog open={pendingSubmit !== null} onOpenChange={(open) => { if (!open && !isSubmitting) setPendingSubmit(null) }}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>This trade breaks the constitution</DialogTitle>
+                        <DialogDescription>
+                            Saving logs these breaches to your consequence ladder. If a number is a typo, go back and fix it instead.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <ul className="space-y-3 py-2">
+                        {loggableBreaches.map(f => (
+                            <li key={f.code} className="flex items-start gap-2 text-sm">
+                                <LevelBadge level={f.level!} />
+                                <span>
+                                    {f.message}
+                                    <span className="block text-xs text-muted-foreground mt-0.5">{LADDER.find(l => l.level === f.level)?.consequence}</span>
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                    <div className="flex flex-col-reverse sm:flex-row justify-end gap-2">
+                        <Button type="button" variant="outline" disabled={isSubmitting} onClick={() => setPendingSubmit(null)}>Go back and fix</Button>
+                        <Button type="button" variant="destructive" disabled={isSubmitting} onClick={() => pendingSubmit && submitTrade(pendingSubmit)}>
+                            {isSubmitting ? "Saving..." : `Save and log ${loggableBreaches.length === 1 ? "breach" : `${loggableBreaches.length} breaches`}`}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </Card>
     )
 }
