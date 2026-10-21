@@ -14,6 +14,8 @@ import { useTradeFilter } from "@/features/trades/context/TradeFilterContext"
 import { isBreakout, tradeLevels } from "@/features/constitution/lib/engine"
 import { CHECKLIST, EXIT_REASONS } from "@/features/constitution/lib/rules"
 import Link from "next/link"
+import { pnlDate } from "@/lib/utils"
+import { tradeSummary } from "@/features/autopilot/components/AutoTrade"
 
 const exitLabel = (reason?: string | null) => EXIT_REASONS.find(r => r.value === reason)?.label || ""
 
@@ -73,8 +75,8 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [], constitutionMo
                 t.analysis?.toLowerCase().includes(searchTerm.toLowerCase());
             
             let matchesDate = true;
-            if (startDate) matchesDate = matchesDate && t.date >= startDate;
-            if (endDate) matchesDate = matchesDate && t.date <= endDate;
+            if (startDate) matchesDate = matchesDate && pnlDate(t) >= startDate;
+            if (endDate) matchesDate = matchesDate && pnlDate(t) <= endDate;
 
             return matchesSearch && matchesDate;
         });
@@ -84,8 +86,10 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [], constitutionMo
     const groupedByDate = useMemo(() => {
         const groups: Record<string, Trade[]> = {};
         filteredTrades.forEach(t => {
-            if (!groups[t.date]) groups[t.date] = [];
-            groups[t.date].push(t);
+            // Swing trades are listed on the day they were sold, when their profit counts.
+            const d = pnlDate(t);
+            if (!groups[d]) groups[d] = [];
+            groups[d].push(t);
         });
         
         // Sort dates descending
@@ -335,8 +339,8 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [], constitutionMo
 
             {openCount > 0 && (
                 <div className="rounded-2xl border border-sky-200 dark:border-sky-900/60 bg-sky-50/70 dark:bg-sky-950/20 p-4 text-sm text-sky-900 dark:text-sky-200">
-                    {openCount} open Momentum Breakout position{openCount === 1 ? " isn't" : "s aren't"} listed here until closed.{" "}
-                    <Link href="/routine" className="font-semibold underline">Manage them in the Evening Routine</Link>.
+                    {openCount} open Autopilot position{openCount === 1 ? " isn't" : "s aren't"} listed here until sold.{" "}
+                    <Link href="/autopilot" className="font-semibold underline">See them in Autopilot</Link>.
                 </div>
             )}
 
@@ -364,7 +368,7 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [], constitutionMo
                                                 <div className="flex justify-between items-start mb-4">
                                                     <div>
                                                         <h3 className="font-bold text-lg">{trade.symbol}</h3>
-                                                        <p className="text-xs text-muted-foreground">{format(new Date(trade.date), "PPP")}</p>
+                                                        <p className="text-xs text-muted-foreground">{trade.setup === "momentum_breakout" ? tradeSummary(trade) : format(new Date(trade.date), "PPP")}</p>
                                                     </div>
                                                     <div className="flex flex-wrap items-center gap-1.5 justify-end">
                                                         {trade.isPaper && (
@@ -378,7 +382,7 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [], constitutionMo
                                                                 AUTO
                                                             </div>
                                                         )}
-                                                        {isBreakout(trade) && trade.processGrade && (
+                                                        {isBreakout(trade) && !trade.auto && trade.processGrade && (
                                                             <div className={`px-2.5 py-1 rounded-full text-xs font-semibold ${trade.processGrade === 'A' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : trade.processGrade === 'C' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'}`}>
                                                                 GRADE {trade.processGrade}
                                                             </div>
@@ -396,7 +400,7 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [], constitutionMo
                                                             </div>
                                                         )}
                                                         <div className={`px-2.5 py-1 rounded-full text-xs font-semibold ${trade.isBasket ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' : trade.type === 'buy' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
-                                                            {trade.isBasket ? "BASKET" : isBreakout(trade) ? "MB" : trade.type.toUpperCase()}
+                                                            {trade.isBasket ? "BASKET" : trade.type.toUpperCase()}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -451,10 +455,12 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [], constitutionMo
                                                                         <span className="text-muted-foreground">Exit reason</span>
                                                                         <span className="font-medium">{exitLabel(trade.exitReason) || "—"}</span>
                                                                     </div>
-                                                                    <div className="flex justify-between">
-                                                                        <span className="text-muted-foreground">Checklist</span>
-                                                                        <span className="font-medium">{(trade.checklist || []).length} / {CHECKLIST.length}</span>
-                                                                    </div>
+                                                                    {!trade.auto && (
+                                                                        <div className="flex justify-between">
+                                                                            <span className="text-muted-foreground">Checklist</span>
+                                                                            <span className="font-medium">{(trade.checklist || []).length} / {CHECKLIST.length}</span>
+                                                                        </div>
+                                                                    )}
                                                                 </>
                                                             )}
                                                         </>
@@ -462,7 +468,7 @@ export function TradeTable({ trades, rules, monthlyAnalyses = [], constitutionMo
                                                 </div>
 
                                                 {trade.analysis && (
-                                                    <div className="text-sm bg-muted/50 p-3 rounded-lg mb-4 max-h-32 overflow-y-auto custom-scrollbar text-muted-foreground text-left">
+                                                    <div className="text-sm bg-muted/50 p-3 rounded-lg mb-4 max-h-32 overflow-y-auto custom-scrollbar text-muted-foreground text-left whitespace-pre-line">
                                                         {trade.analysis}
                                                     </div>
                                                 )}

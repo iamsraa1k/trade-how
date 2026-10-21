@@ -11,7 +11,8 @@ import { Input } from "@/shared/components/ui/input"
 import { CalendarView } from "@/features/calendar/components/CalendarView"
 import { useTradeFilter } from "@/features/trades/context/TradeFilterContext"
 import { FileText } from "lucide-react"
-import { ConstitutionStatusPanel } from "@/features/constitution/components/ConstitutionStatusPanel"
+import { AutopilotStrip } from "@/features/autopilot/components/AutopilotStrip"
+import { pnlDate } from "@/lib/utils"
 import { computeStatus } from "@/features/constitution/lib/engine"
 
 export function Dashboard({ trades, rules, constitution = null, breaches = [], constitutionMode = false }: { trades: Trade[], rules: Rule[], constitution?: ConstitutionSettings | null, breaches?: Breach[], constitutionMode?: boolean }) {
@@ -27,7 +28,7 @@ export function Dashboard({ trades, rules, constitution = null, breaches = [], c
         const start = startOfMonth(currentMonth)
         const end = endOfMonth(currentMonth)
         return visibleTrades.filter(t => {
-            const tradeDate = new Date(t.date)
+            const tradeDate = new Date(pnlDate(t))
             return tradeDate >= start && tradeDate <= end
         })
     }, [visibleTrades, currentMonth])
@@ -37,7 +38,7 @@ export function Dashboard({ trades, rules, constitution = null, breaches = [], c
         if (customStartDate > customEndDate) return null;
 
         const relevantTrades = visibleTrades.filter(t => {
-            return t.date >= customStartDate && t.date <= customEndDate;
+            return pnlDate(t) >= customStartDate && pnlDate(t) <= customEndDate;
         });
 
         return relevantTrades.reduce((acc, t) => acc + t.pnl, 0);
@@ -107,7 +108,7 @@ export function Dashboard({ trades, rules, constitution = null, breaches = [], c
                 </div>
             </div>
 
-            {constitutionMode && <ConstitutionStatusPanel status={constitutionStatus} compact />}
+            {constitutionMode && <AutopilotStrip status={constitutionStatus} trades={trades} />}
 
             <div className="w-full pb-2">
                 <CalendarView trades={visibleTrades} rules={rules} currentMonth={currentMonth} onMonthChange={setCurrentMonth} />

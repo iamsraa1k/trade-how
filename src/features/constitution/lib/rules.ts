@@ -191,32 +191,10 @@ export function breachLabel(code: string): string {
 export const EXIT_REASONS: { value: "stop" | "breakeven" | "trail" | "time" | "results" | "other"; label: string }[] = [
     { value: "stop", label: "Stop hit" },
     { value: "breakeven", label: "Breakeven stop" },
-    { value: "trail", label: "20-EMA trail" },
+    { value: "trail", label: "Trailing exit (20-day average)" },
     { value: "time", label: "Time stop (15 days)" },
-    { value: "results", label: "Results rule" },
+    { value: "results", label: "Sold before results" },
     { value: "other", label: "Other (not a written rule)" },
-]
-
-// NSE industry names, as in the Nifty 200 list, so typed and auto-filled sectors match for the 2-per-sector limit.
-export const SECTORS = [
-    "Automobile and Auto Components",
-    "Capital Goods",
-    "Chemicals",
-    "Construction",
-    "Construction Materials",
-    "Consumer Durables",
-    "Consumer Services",
-    "Fast Moving Consumer Goods",
-    "Financial Services",
-    "Healthcare",
-    "Information Technology",
-    "Metals & Mining",
-    "Oil Gas & Consumable Fuels",
-    "Power",
-    "Realty",
-    "Services",
-    "Telecommunication",
-    "Textiles",
 ]
 
 export const PHASES: { phase: 0 | 1 | 2 | 3 | 4; name: string; span: string; points: string[]; gate?: { name: string; text: string } }[] = [
@@ -285,21 +263,4 @@ export const KILL_CRITERIA = [
     "You trigger a Level 4 reset a second time.",
     "Any trading rupee comes from outside surplus income — a loan, the emergency fund, an SIP redemption — even once.",
     "Repayments slip, or trading measurably costs you at work.",
-]
-
-export const ROUTINE_STEPS: { id: string; title: string; detail: string }[] = [
-    { id: "light", title: "Market light", detail: "Open the Nifty 50 chart. A close above the red 200 SMA means green. Note it." },
-    { id: "open", title: "Open trades first", detail: "Compare today's close with each holding's breakeven, trail and time-stop levels below. Act through GTT edits or AMO sells." },
-    { id: "orders", title: "Old buy orders", detail: "In Orders → GTT, delete any buy GTT that has gone 3 trading days without triggering." },
-    { id: "scan", title: "Run the scan", detail: "Chartink → MB breakout → Run scan. Most evenings it returns zero to five stocks." },
-    { id: "check", title: "Check each result", detail: "Flat, narrow base; results more than 10 trading days away; sector and weekly limits not full; light green." },
-    { id: "size", title: "Size it", detail: "Type the breakout day's high and low into the sizing calculator. Shares = 0 means skip." },
-    { id: "gtt", title: "Place the GTT buy", detail: "Create GTT → Single → Buy → trigger and limit from the sheet → product CNC → quantity from the sheet." },
-    { id: "journal", title: "Journal the plan", detail: "Log it as an open trade: trigger, limit, stop, shares, results date." },
-]
-
-export const WEEKLY_REVIEW_ITEMS = [
-    "Compare each number with the backtest's expected range. Four weeks outside it = investigate before placing new trades.",
-    "Run MB bases and refresh the watchlist.",
-    "Rule changes only at a phase boundary — never mid-week, never after a loss.",
 ]

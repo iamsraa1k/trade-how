@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { LayoutDashboard, Calendar, List, CheckSquare, PlusCircle, FileText, TrendingUp, Layers, ScrollText, Moon, Gavel, Bot } from "lucide-react";
+import { LayoutDashboard, Calendar, List, CheckSquare, PlusCircle, FileText, TrendingUp, Layers, ScrollText, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTradeFilter, TradeMode } from "@/features/trades/context/TradeFilterContext";
 import { Switch } from "@/shared/components/ui/switch";
@@ -18,12 +18,8 @@ const navItems = [
   { name: "Monthly Analysis", href: "/monthly-analysis", icon: Calendar },
 ];
 
-const constitutionItems = [
-  { name: "Constitution", href: "/constitution", icon: ScrollText },
-  { name: "Evening Routine", href: "/routine", icon: Moon },
-  { name: "Discipline", href: "/discipline", icon: Gavel },
-  { name: "Automation", href: "/automation", icon: Bot },
-];
+// Shown after Trade Log while constitution mode is on.
+const autopilotItem = { name: "Autopilot", href: "/autopilot", icon: Bot };
 
 const filterOptions: { mode: TradeMode; label: string; icon: React.ElementType; description: string }[] = [
   { mode: "all", label: "All", icon: Layers, description: "Combined" },
@@ -37,6 +33,7 @@ export function AppSidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: 
   const { tradeMode, setTradeMode } = useTradeFilter();
   const { constitutionAllowed, constitutionMode, setConstitution } = useData();
   const [switching, setSwitching] = useState(false);
+  const items = constitutionMode ? [navItems[0], navItems[1], autopilotItem, ...navItems.slice(2)] : navItems;
 
   const toggleConstitutionMode = async (on: boolean) => {
     setSwitching(true);
@@ -48,7 +45,7 @@ export function AppSidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: 
     }
     setConstitution(result.data);
     toast.success(on ? "Constitution mode on" : "Constitution mode off");
-    if (!on && constitutionItems.some(item => item.href === pathname)) router.push("/");
+    if (!on && pathname === autopilotItem.href) router.push("/");
   };
 
   return (
@@ -120,7 +117,7 @@ export function AppSidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: 
         )}
 
         <nav className="p-4 space-y-2">
-          {navItems.map((item) => {
+          {items.map((item) => {
             const isActive = pathname === item.href;
             return (
               <Link
@@ -137,29 +134,6 @@ export function AppSidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: 
               </Link>
             );
           })}
-
-          {constitutionMode && (
-          <div className="pt-4 mt-4 border-t space-y-2">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-3 pb-1">Constitution</p>
-            {constitutionItems.map((item) => {
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  onClick={() => setIsOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all hover:bg-muted",
-                    isActive ? "bg-muted text-primary" : "text-muted-foreground"
-                  )}
-                >
-                  <item.icon className="h-5 w-5" />
-                  {item.name}
-                </Link>
-              );
-            })}
-          </div>
-          )}
 
           <div className="pt-4 mt-4 border-t">
             <Link

@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react"
 import type { Trade, Rule, MonthlyAnalysis } from "@/lib/db"
 import { useTradeFilter } from "@/features/trades/context/TradeFilterContext"
+import { pnlDate } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card"
 import { Button } from "@/shared/components/ui/button"
 import { ChevronLeft, ChevronRight, PenTool, Eye, AlertCircle, FileText, Star, ThumbsDown } from "lucide-react"
@@ -64,7 +65,7 @@ export function MonthlyView({ trades, rules, monthlyAnalyses }: { trades: Trade[
 
     const selectedMonthTrades = useMemo(() => {
         if (!selectedMonthStr) return [];
-        return visibleTrades.filter(t => t.date.startsWith(selectedMonthStr));
+        return visibleTrades.filter(t => pnlDate(t).startsWith(selectedMonthStr));
     }, [visibleTrades, selectedMonthStr]);
 
     const selectedMonthPnl = useMemo(() => {
@@ -93,7 +94,7 @@ export function MonthlyView({ trades, rules, monthlyAnalyses }: { trades: Trade[
                         {monthsInYear.map((monthDate) => {
                             const monthStr = format(monthDate, "yyyy-MM");
                             const hasAnalysis = monthlyAnalyses.some(ma => ma.monthYear === monthStr && ma.analysis.trim().length > 0);
-                            const monthTrades = visibleTrades.filter(t => t.date.startsWith(monthStr));
+                            const monthTrades = visibleTrades.filter(t => pnlDate(t).startsWith(monthStr));
                             const monthPnl = monthTrades.reduce((acc, t) => acc + t.pnl, 0);
                             const tradeCount = monthTrades.length;
                             const isCurrentMonth = isSameMonth(monthDate, new Date());
@@ -208,7 +209,7 @@ export function MonthlyView({ trades, rules, monthlyAnalyses }: { trades: Trade[
                                                                             {trade.tradeQuality === 'violation' && <ThumbsDown className="w-3.5 h-3.5 text-red-500" />}
                                                                         </>
                                                                     )}
-                                                                    <span className="text-[10px] text-muted-foreground">{format(new Date(trade.date), "MMM d")}</span>
+                                                                    <span className="text-[10px] text-muted-foreground">{format(new Date(pnlDate(trade)), "MMM d")}</span>
                                                                 </div>
                                                                 <div className="text-xs text-muted-foreground mt-0.5">
                                                                     {trade.isBasket ? `Basket • ${trade.legs?.length || 0} legs` : trade.type.toUpperCase()}

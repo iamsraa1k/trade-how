@@ -1,16 +1,16 @@
 "use client"
 
-import { ConstitutionView } from "@/features/constitution/components/ConstitutionView";
-import { useData } from "@/shared/context/DataContext";
+import { AutopilotView } from "@/features/autopilot/components/AutopilotView";
 import { ConstitutionGate } from "@/features/constitution/components/ConstitutionGate";
+import { useData } from "@/shared/context/DataContext";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-export default function ConstitutionPage() {
+export default function AutopilotPage() {
   const { status } = useSession();
   const router = useRouter();
-  const { constitution, trades, breaches } = useData();
+  const { constitution, trades, breaches, impulses } = useData();
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -26,10 +26,10 @@ export default function ConstitutionPage() {
     <ConstitutionGate>
       <div className="page-container">
         <div className="page-header">
-          <h1 className="page-title">Trading Constitution</h1>
-          <p className="page-description">One setup, fixed risk, and consequences decided in advance. Process framework, not investment advice.</p>
+          <h1 className="page-title">Autopilot</h1>
+          <p className="page-description">It scans every evening, trades the Momentum Breakout setup on paper, and writes down why.</p>
         </div>
-        <ConstitutionView constitution={constitution} trades={trades} breaches={breaches} />
+        <AutopilotView constitution={constitution} trades={trades} breaches={breaches} impulses={impulses} />
       </div>
     </ConstitutionGate>
   );

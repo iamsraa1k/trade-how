@@ -17,6 +17,9 @@ export interface StockSnapshot {
     low: number
     close: number
     volume: number
+    prevClose: number
+    changePct: number      // today's move vs the previous close
+    closeInRangePct: number // 0 = closed at the day's low, 100 = at the high
     sma50: number
     sma200: number
     sma200Prev20: number
@@ -85,6 +88,8 @@ export function analyzeStock(candles: Candle[], index = candles.length - 1): Sto
     const closes = candles.map(c => c.close)
     const volumes = candles.map(c => c.volume)
     const today = candles[index]
+    const prevClose = candles[index - 1].close
+    const range = today.high - today.low
 
     const sma50 = smaAt(closes, index, 50)!
     const sma200 = smaAt(closes, index, 200)!
@@ -117,6 +122,9 @@ export function analyzeStock(candles: Candle[], index = candles.length - 1): Sto
         low: today.low,
         close: today.close,
         volume: today.volume,
+        prevClose,
+        changePct: prevClose > 0 ? ((today.close - prevClose) / prevClose) * 100 : 0,
+        closeInRangePct: range > 0 ? ((today.close - today.low) / range) * 100 : 50,
         sma50,
         sma200,
         sma200Prev20,

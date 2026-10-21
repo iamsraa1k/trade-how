@@ -14,7 +14,7 @@ export function ConstitutionGate({ children }: { children: React.ReactNode }) {
             {constitutionAllowed ? (
                 <>
                     <h2 className="text-xl font-bold">Constitution mode is off</h2>
-                    <p className="text-sm text-muted-foreground">Switch on <b>Constitution mode</b> in the sidebar to bring in your trading constitution, routine, discipline and automation.</p>
+                    <p className="text-sm text-muted-foreground">Switch on <b>Constitution mode</b> in the sidebar to bring in Autopilot and your trading constitution.</p>
                 </>
             ) : (
                 <>

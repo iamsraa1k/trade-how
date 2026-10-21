@@ -5,7 +5,7 @@ import type { Trade, Rule } from "@/lib/db"
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card"
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from "date-fns"
 import { Button } from "@/shared/components/ui/button"
-import { ChevronLeft, ChevronRight, Star, Trash2, Edit, ThumbsDown, FileText } from "lucide-react"
+import { ChevronLeft, ChevronRight, Star, Trash2, Edit, ThumbsDown, FileText, Bot, Eye } from "lucide-react"
 import { deleteTradeAction } from "@/app/actions"
 import Link from "next/link"
 import { toast } from "sonner"
@@ -18,6 +18,9 @@ import {
 } from "@/shared/components/ui/dialog"
 import { motion } from "framer-motion"
 import { useTradeFilter } from "@/features/trades/context/TradeFilterContext"
+import { pnlDate } from "@/lib/utils"
+import { TradeLog, tradeSummary } from "@/features/autopilot/components/AutoTrade"
+import { inr } from "@/features/constitution/lib/format"
 
 const formatCompactNumber = (num: number) => {
     if (num === 0) return '0';
@@ -29,8 +32,13 @@ const formatCompactNumber = (num: number) => {
 }
 
 export function CalendarView({ trades: rawTrades, rules, currentMonth, onMonthChange }: { trades: Trade[], rules: Rule[], currentMonth: Date, onMonthChange: (date: Date) => void }) {
-    const { filterTrades } = useTradeFilter()
+    const { filterTrades, tradeMode } = useTradeFilter()
     const trades = filterTrades(rawTrades)
+    // Open swing positions have no profit yet; they're marked on the day they were bought.
+    const openTrades = useMemo(() => rawTrades.filter(t =>
+        t.status === "open" && t.entryPrice > 0 &&
+        (tradeMode === "all" || (tradeMode === "paper" ? !!t.isPaper : !t.isPaper))
+    ), [rawTrades, tradeMode])
 
     const [selectedDate, setSelectedDate] = useState<Date | null>(null)
     const [isDayModalOpen, setIsDayModalOpen] = useState(false)
@@ -46,14 +54,25 @@ export function CalendarView({ trades: rawTrades, rules, currentMonth, onMonthCh
     })
     const startDay = getDay(startOfMonth(currentMonth))
 
+    // Profit counts on the day a trade was sold (its trade date for intraday trades).
     const tradesByDate = useMemo(() => {
         const map: Record<string, Trade[]> = {}
         trades.forEach(t => {
+            const d = pnlDate(t)
+            if (!map[d]) map[d] = []
+            map[d].push(t)
+        })
+        return map
+    }, [trades])
+
+    const openByDate = useMemo(() => {
+        const map: Record<string, Trade[]> = {}
+        openTrades.forEach(t => {
             if (!map[t.date]) map[t.date] = []
             map[t.date].push(t)
         })
         return map
-    }, [trades])
+    }, [openTrades])
 
     const getPnlForDay = (date: Date) => {
         const dateStr = format(date, "yyyy-MM-dd")
@@ -65,7 +84,7 @@ export function CalendarView({ trades: rawTrades, rules, currentMonth, onMonthCh
     const handleDayClick = (date: Date) => {
         const dateStr = format(date, "yyyy-MM-dd")
         const tradesForDay = tradesByDate[dateStr] || []
-        if (tradesForDay.length > 0) {
+        if (tradesForDay.length > 0 || (openByDate[dateStr] || []).length > 0) {
             setSelectedDate(date)
             setMobileActiveTradeId(null)
             setDeleteConfirmId(null)
@@ -75,9 +94,12 @@ export function CalendarView({ trades: rawTrades, rules, currentMonth, onMonthCh
 
     // Modal data
     let selectedTrades: Trade[] = [];
+    let selectedOpen: Trade[] = [];
     let selectedDayTotalPnl = 0;
     if (selectedDate) {
-        selectedTrades = trades.filter(t => t.date === format(selectedDate, "yyyy-MM-dd"));
+        const key = format(selectedDate, "yyyy-MM-dd");
+        selectedTrades = tradesByDate[key] || [];
+        selectedOpen = openByDate[key] || [];
         selectedDayTotalPnl = selectedTrades.reduce((acc, t) => acc + t.pnl, 0);
     }
 
@@ -134,6 +156,7 @@ export function CalendarView({ trades: rawTrades, rules, currentMonth, onMonthCh
                             const isMixed = tradesForThatDay.length > 0 && !allPaper && !allRegular
 
                             const tradeCount = tradesForThatDay.reduce((count, t) => count + (t.isBasket && t.legs ? t.legs.length : 1), 0)
+                            const openCount = (openByDate[format(day, "yyyy-MM-dd")] || []).length
 
                             // Determine cell background classes
                             let cellBgClass: string
@@ -207,6 +230,12 @@ export function CalendarView({ trades: rawTrades, rules, currentMonth, onMonthCh
                                             </div>
                                         </div>
                                     )}
+                                    {openCount > 0 && (
+                                        <div className={`flex items-center justify-center gap-1 ${pnl === null ? 'flex-1' : 'mt-auto'}`} title={`${openCount} open position${openCount > 1 ? 's' : ''} bought this day`}>
+                                            <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                                            <span className="hidden sm:inline text-[10px] font-semibold text-sky-600 dark:text-sky-400">{openCount} open</span>
+                                        </div>
+                                    )}
                                 </motion.div>
                             )
                         })}
@@ -218,18 +247,18 @@ export function CalendarView({ trades: rawTrades, rules, currentMonth, onMonthCh
                 <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Trades on {selectedDate && format(selectedDate, "MMMM d, yyyy")}</DialogTitle>
-                        <DialogDescription>Review individual trades taken on this day.</DialogDescription>
+                        <DialogDescription>Trades closed on this day, and positions bought on it that are still open.</DialogDescription>
                     </DialogHeader>
 
                     {/* Explicit Total PnL for the Day */}
-                    <div className="py-4 border-b">
+                    {selectedTrades.length > 0 && <div className="py-4 border-b">
                         <div className="flex justify-between items-center px-4 py-3 bg-muted/30 rounded-lg border shadow-inner">
                             <span className="font-semibold text-sm sm:text-lg">Total Daily Returns</span>
                             <span className={`font-bold text-lg sm:text-2xl ${selectedDayTotalPnl > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                                 {selectedDayTotalPnl > 0 ? '+' : ''}{selectedDayTotalPnl.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
                             </span>
                         </div>
-                    </div>
+                    </div>}
 
                     <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto px-1 custom-scrollbar">
                         {selectedTrades.map((trade, idx) => (
@@ -239,10 +268,14 @@ export function CalendarView({ trades: rawTrades, rules, currentMonth, onMonthCh
                                         <span className="font-bold text-sm sm:text-lg flex items-center gap-2">
                                             {trade.symbol}
                                             {trade.isPaper && <span className="text-[10px] bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full dark:bg-teal-900/30 dark:text-teal-400 font-semibold">PAPER</span>}
+                                            {trade.auto && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full dark:bg-indigo-900/30 dark:text-indigo-300 font-semibold flex items-center gap-1"><Bot className="h-3 w-3" />AUTO</span>}
                                             {trade.isBasket && <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full dark:bg-purple-900/30 dark:text-purple-400">BASKET ORDER • {trade.legs?.length || 0} LEGS</span>}
                                             {trade.tradeQuality === 'flawless' && <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500" />}
                                             {trade.tradeQuality === 'violation' && <ThumbsDown className="h-3.5 w-3.5 text-red-500" />}
                                         </span>
+                                        {trade.setup === "momentum_breakout" && (
+                                            <div className="text-xs text-muted-foreground mt-1">{tradeSummary(trade)}</div>
+                                        )}
                                         <div className="text-xs text-muted-foreground flex gap-3 mt-1">
                                             {!trade.isBasket && (
                                                 <>
@@ -277,8 +310,43 @@ export function CalendarView({ trades: rawTrades, rules, currentMonth, onMonthCh
                                         )}
                                     </div>
                                 </div>
+                                {trade.auto && trade.analysis && (
+                                    <details className="mt-2 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+                                        <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">Why it was bought and sold</summary>
+                                        <TradeLog text={trade.analysis} className="mt-2 text-xs" />
+                                    </details>
+                                )}
                             </div>
                         ))}
+
+                        {selectedOpen.length > 0 && (
+                            <div className="space-y-2 pt-2">
+                                <p className="text-sm font-semibold text-sky-700 dark:text-sky-300">Bought this day, still open</p>
+                                {selectedOpen.map(trade => (
+                                    <div key={trade.id} className="p-4 border rounded-xl bg-card shadow-sm border-l-4 border-l-sky-400 dark:border-l-sky-600">
+                                        <div className="flex justify-between items-start gap-3">
+                                            <div className="min-w-0">
+                                                <span className="font-bold text-sm sm:text-lg flex items-center gap-2">
+                                                    {trade.symbol}
+                                                    {trade.isPaper && <span className="text-[10px] bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full dark:bg-teal-900/30 dark:text-teal-400 font-semibold">PAPER</span>}
+                                                    {trade.auto && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full dark:bg-indigo-900/30 dark:text-indigo-300 font-semibold flex items-center gap-1"><Bot className="h-3 w-3" />AUTO</span>}
+                                                </span>
+                                                <div className="text-xs text-muted-foreground mt-1">{tradeSummary(trade)} · {trade.quantity} shares · stop {inr(trade.currentStop ?? trade.stopPrice, 2)}</div>
+                                            </div>
+                                            <Link href={`/edit/${trade.id}`}>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-indigo-500" aria-label="View trade"><Eye className="h-3.5 w-3.5" /></Button>
+                                            </Link>
+                                        </div>
+                                        {trade.analysis && (
+                                            <details className="mt-2">
+                                                <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">Why it was bought</summary>
+                                                <TradeLog text={trade.analysis} className="mt-2 text-xs" />
+                                            </details>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </DialogContent>
             </Dialog>

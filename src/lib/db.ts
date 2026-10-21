@@ -347,6 +347,12 @@ export interface ScanStock {
     baseWeeks: number
     baseRangePct: number
     resultsDate: string | null
+    // Added for the breakout analysis (optional: scans saved earlier don't have them)
+    changePct?: number
+    closeInRangePct?: number
+    baseHigh?: number
+    pctBelow52wHigh?: number
+    pctToBreakout?: number      // bases only: how far the close is below the base top
 }
 
 export interface ScanResult {
@@ -361,6 +367,13 @@ export interface ScanResult {
     resultsCalendar: boolean
 }
 
+// What the last nightly run decided for each breakout (taken as a paper trade, or why not).
+export interface SignalVerdict {
+    symbol: string
+    take: boolean
+    verdict: string
+}
+
 // Server-only: holds the Telegram bot token, so it is never sent to the browser as-is.
 export interface AutomationDoc {
     userId: string
@@ -369,6 +382,7 @@ export interface AutomationDoc {
     lastRunAt?: string | null
     lastSummary?: string | null
     lastError?: string | null
+    lastSignals?: SignalVerdict[]
     recentMessages?: { at: string; text: string }[]
 }
 

@@ -1,9 +1,8 @@
 'use server'
 
-import { getTrades, saveTrade, updateTrade, deleteTrade, getRules, addRule, deleteRule, getMonthlyAnalyses, saveMonthlyAnalysis, getConstitution, saveConstitution, addBreaches, deleteBreach, addImpulse, updateImpulse, deleteImpulse } from '@/lib/db';
+import { getTrades, getTradeById, saveTrade, updateTrade, deleteTrade, getRules, addRule, deleteRule, getMonthlyAnalyses, saveMonthlyAnalysis, getConstitution, saveConstitution, addBreaches, deleteBreach, addImpulse, updateImpulse, deleteImpulse } from '@/lib/db';
 import { getAutomation, saveAutomation, getLatestScan } from '@/lib/db';
 import type { Trade, ConstitutionSettings } from '@/lib/db';
-import { analyzeSymbol } from '@/features/automation/lib/pipeline';
 import { istToday } from '@/features/automation/lib/marketData';
 import { canUseConstitution } from '@/lib/access';
 import { findChatForCode, getBotUsername, sendMessage } from '@/features/automation/lib/telegram';
@@ -13,13 +12,6 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-
-const optionalNumber = z.preprocess(
-    (v) => (v === "" || v === null || v === undefined ? null : v),
-    z.coerce.number().nullable()
-).optional().default(null);
-
-const optionalDate = z.string().optional().transform(v => v || null);
 
 const TradeSchema = z.object({
     date: z.string().min(1, "Date is required"),
@@ -37,24 +29,7 @@ const TradeSchema = z.object({
     isBasket: z.boolean().optional().default(false),
     legs: z.any().optional(),
     isPaper: z.boolean().optional().default(false),
-    tradeQuality: z.enum(["flawless", "acceptable", "violation"]).optional(),
-
-    // Momentum Breakout journal fields
-    setup: z.string().optional().default(""),
-    status: z.enum(["open", "closed"]).optional().default("closed"),
-    sector: z.string().optional().default(""),
-    marketLight: z.enum(["green", "red", ""]).optional().default(""),
-    baseWeeks: optionalNumber,
-    volumeRatio: optionalNumber,
-    trigger: optionalNumber,
-    limitPrice: optionalNumber,
-    stopPrice: optionalNumber,
-    resultsDate: optionalDate,
-    exitDate: optionalDate,
-    exitReason: z.enum(["stop", "breakeven", "trail", "time", "results", "other", ""]).optional().default(""),
-    checklist: z.array(z.string()).optional().default([]),
-    processGrade: z.enum(["A", "B", "C", ""]).optional().default(""),
-    repeatNote: z.string().optional().default(""),
+    tradeQuality: z.enum(["flawless", "acceptable", "violation"]).optional()
 });
 
 const BreachSchema = z.object({
@@ -65,13 +40,10 @@ const BreachSchema = z.object({
     tradeId: z.string().nullable().optional(),
 });
 
-const GRADE_TO_QUALITY = { A: "flawless", B: "acceptable", C: "violation" } as const;
-
 // Shared by add and update: turns the submitted form into the stored trade shape.
-function parseTradeForm(formData: FormData, constitutionAllowed: boolean) {
+function parseTradeForm(formData: FormData) {
     const formObject: Record<string, any> = Object.fromEntries(formData.entries());
     formObject.rules = formData.getAll('rules');
-    formObject.checklist = formData.getAll('checklist');
     formObject.isBasket = formObject.isBasket === "true";
     formObject.isPaper = formObject.isPaper === "true";
 
@@ -87,59 +59,26 @@ function parseTradeForm(formData: FormData, constitutionAllowed: boolean) {
     }
 
     const data = parsed.data;
-    const isBreakout = constitutionAllowed && data.setup === "momentum_breakout";
-    const isOpen = isBreakout && data.status === "open";
-    const grade = isBreakout && data.processGrade ? data.processGrade : null;
-
-    let tradeQuality: Trade["tradeQuality"] = data.isPaper ? null : (data.tradeQuality || null);
-    if (!data.isPaper && grade) tradeQuality = GRADE_TO_QUALITY[grade];
-
     const trade: Omit<Trade, 'id' | 'userId'> = {
         date: data.date,
         time: data.time || "00:00",
         symbol: data.symbol,
         type: (data.type === "sell" ? "sell" : "buy") as "buy" | "sell",
         entryPrice: data.entry,
-        exitPrice: isOpen ? 0 : data.exit,
+        exitPrice: data.exit,
         quantity: data.quantity,
         fees: data.fees,
-        pnl: isOpen ? 0 : data.pnl,
+        pnl: data.pnl,
         analysis: data.analysis,
         rules: data.rules,
         attachment: (data.attachment as File)?.name || "",
-        isBasket: isBreakout ? false : data.isBasket,
-        legs: isBreakout ? [] : data.legs,
+        isBasket: data.isBasket,
+        legs: data.legs,
         isPaper: data.isPaper,
-        tradeQuality,
-        setup: isBreakout ? "momentum_breakout" : null,
-        status: isBreakout ? data.status : null,
+        tradeQuality: data.isPaper ? null : (data.tradeQuality || null),
+        status: null, // saving through the form closes any breakout trade logged by hand earlier
     };
-
-    if (isBreakout) {
-        Object.assign(trade, {
-            sector: data.sector.trim(),
-            marketLight: data.marketLight || null,
-            baseWeeks: data.baseWeeks,
-            volumeRatio: data.volumeRatio,
-            trigger: data.trigger,
-            limitPrice: data.limitPrice,
-            stopPrice: data.stopPrice,
-            resultsDate: data.resultsDate,
-            exitDate: isOpen ? null : data.exitDate,
-            exitReason: isOpen ? null : (data.exitReason || null),
-            checklist: data.checklist,
-            processGrade: grade,
-            repeatNote: data.repeatNote,
-        });
-    }
-
-    let breaches: z.infer<typeof BreachSchema>[] = [];
-    if (isBreakout && formObject.breachesData) {
-        const parsedBreaches = z.array(BreachSchema).safeParse(JSON.parse(formObject.breachesData as string));
-        if (parsedBreaches.success) breaches = parsedBreaches.data;
-    }
-
-    return { trade, breaches } as const;
+    return { trade } as const;
 }
 
 // Helper to get authenticated user or throw/redirect
@@ -200,15 +139,12 @@ export async function addNewTrade(formData: FormData) {
     try {
         const userId = await getAuthenticatedUser();
 
-        const parsed = parseTradeForm(formData, canUseConstitution(userId));
+        const parsed = parseTradeForm(formData);
         if ('error' in parsed) {
             return { success: false, error: parsed.error };
         }
 
         const saved = await saveTrade(parsed.trade, userId);
-        if (parsed.breaches.length > 0) {
-            await addBreaches(userId, parsed.breaches.map(b => ({ ...b, level: b.level as 1 | 2 | 3 | 4, tradeId: saved.id })));
-        }
         revalidatePath('/', 'layout');
         return { success: true, id: saved.id };
     } catch (error: any) {
@@ -221,15 +157,17 @@ export async function updateTradeAction(id: string, formData: FormData) {
     try {
         const userId = await getAuthenticatedUser();
 
-        const parsed = parseTradeForm(formData, canUseConstitution(userId));
+        const parsed = parseTradeForm(formData);
         if ('error' in parsed) {
             return { success: false, error: parsed.error };
         }
+        // Autopilot trades are kept in step with market data, so they aren't edited by hand.
+        const existing = await getTradeById(id, userId);
+        if (existing?.auto) {
+            return { success: false, error: "Autopilot trades can't be edited" };
+        }
 
         await updateTrade(id, parsed.trade, userId);
-        if (parsed.breaches.length > 0) {
-            await addBreaches(userId, parsed.breaches.map(b => ({ ...b, level: b.level as 1 | 2 | 3 | 4, tradeId: id })));
-        }
         revalidatePath('/', 'layout');
         return { success: true, id };
     } catch (error: any) {
@@ -409,8 +347,23 @@ export async function getAutomationOverviewAction() {
         lastRunAt: automation?.lastRunAt || null,
         lastSummary: automation?.lastSummary || null,
         lastError: automation?.lastError || null,
+        lastSignals: automation?.lastSignals || [],
         recentMessages: automation?.recentMessages || [],
         latestScan,
+    };
+}
+
+// Small summary for the dashboard strip (no message history).
+export async function getAutopilotStatusAction() {
+    const userId = await requireConstitutionUser();
+    const [automation, latestScan] = await Promise.all([getAutomation(userId), getLatestScan().catch(() => null)]);
+    return {
+        scanDate: latestScan?.date || null,
+        light: latestScan?.marketLight || null,
+        breakouts: latestScan?.breakouts.length ?? 0,
+        lastRunAt: automation?.lastRunAt || null,
+        lastError: automation?.lastError || null,
+        telegramLinked: !!automation?.telegram?.chatId,
     };
 }
 
@@ -466,19 +419,6 @@ export async function disconnectTelegramAction() {
     } catch (error) {
         console.error("Failed to disconnect Telegram", error);
         return { success: false, error: "Failed to disconnect Telegram" };
-    }
-}
-
-export async function analyzeSymbolAction(symbol: string, date: string | null) {
-    try {
-        await requireConstitutionUser();
-        if (!symbol.trim()) return { success: false, error: "Enter a stock symbol first." };
-        const result = await analyzeSymbol(symbol, date);
-        if ("error" in result) return { success: false, error: result.error };
-        return { success: true, data: result };
-    } catch (error) {
-        console.error("Failed to analyse symbol", error);
-        return { success: false, error: "Market data is unavailable right now. Try again, or enter the values by hand." };
     }
 }
 

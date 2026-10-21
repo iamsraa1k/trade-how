@@ -95,13 +95,13 @@ export function stepPaper(state: PaperState, day: Candle, ema20: number | null, 
     if (s.trailActive && ema20 !== null && day.close < ema20) {
         s.pendingExit = "trail"
     }
-    if (!s.trailActive && day.close >= s.entry + 2 * r) {
-        s.trailActive = true
-        events.push({ type: "trail-armed", date: day.date })
-    }
     if (s.currentStop < s.entry && day.close >= s.entry + 1.5 * r) {
         s.currentStop = s.entry
         events.push({ type: "breakeven", date: day.date, stop: s.currentStop })
+    }
+    if (!s.trailActive && day.close >= s.entry + 2 * r) {
+        s.trailActive = true
+        events.push({ type: "trail-armed", date: day.date })
     }
     if (day.close > s.entry + r) s.everAbovePlusOneR = true
     if (!s.pendingExit && s.sessionsHeld >= 15 && !s.everAbovePlusOneR) {

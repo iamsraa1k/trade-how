@@ -154,7 +154,7 @@ export function ValidationPanel({ settings, trades }: { settings: ResolvedSettin
             <Card className="glass-card">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2"><PassIcon pass={paper.passed ? true : null} /> Stage 2 — Paper trading</CardTitle>
-                    <CardDescription>20 trades and at least 8 weeks, whichever comes later. Profit isn&apos;t required. Log these as paper Momentum Breakout trades.</CardDescription>
+                    <CardDescription>20 trades and at least 8 weeks, whichever comes later. Profit isn&apos;t required. Autopilot&apos;s paper trades count here.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2">
                     {paper.checks.map(c => (

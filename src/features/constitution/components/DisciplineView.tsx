@@ -18,8 +18,8 @@ import { useData } from "@/shared/context/DataContext"
 import { cn } from "@/lib/utils"
 import { ESCALATION_LABELS, LADDER, breachLabel, type BreachLevel } from "../lib/rules"
 import { computeStatus, impulseOutcome, todayISO, type Consequence } from "../lib/engine"
-import { LevelBadge } from "./BreakoutFields"
-import { inr } from "./ConstitutionStatusPanel"
+import { LevelBadge } from "./LevelBadge"
+import { inr } from "../lib/format"
 
 const selectClass = "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
 

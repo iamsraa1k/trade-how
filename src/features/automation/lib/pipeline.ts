@@ -1,22 +1,24 @@
-import { endOfWeek, format, parseISO, startOfWeek } from "date-fns"
+import { endOfWeek, parseISO, startOfWeek } from "date-fns"
 import {
     addTradingDays, computeSizing, computeStatus, isBreakout, realizedDate, reviewStats, toISO, tradingDaysBetween,
-    type ConstitutionStatus, type ReviewStats,
+    type ConstitutionStatus, type ReviewStats, type SizingResult,
 } from "@/features/constitution/lib/engine"
 import { CHECKLIST, MAX_ENTRIES_PER_WEEK, MAX_OPEN_POSITIONS, MAX_PER_SECTOR, RESULTS_BUFFER_TRADING_DAYS, SETUP_ID, breachLabel } from "@/features/constitution/lib/rules"
 import {
     deleteTrade, getAutomation, getBreaches, getConstitution, getLatestScan, getScan, getTrades, saveAutomation, saveScan, saveTrade, updateTrade,
     type ScanResult, type ScanStock, type Trade,
 } from "@/lib/db"
+import { constitutionEmails } from "@/lib/access"
+import { capitalise, readSetup } from "./analysis"
+import { composeDailyDigest, fmtR, inr, shortDate, signedInr, type OpenAutoPosition, type SignalDecision } from "./digest"
 import {
-    NIFTY50_KEY, fetchDailyCandles, fetchResultsCalendar, findInUniverse, instrumentKey, istNow, istToday, loadUniverse, mapLimit,
+    NIFTY50_KEY, fetchDailyCandles, fetchResultsCalendar, instrumentKey, istNow, istToday, loadUniverse, mapLimit,
     type UniverseStock,
 } from "./marketData"
-import { stepPaper, type PaperEvent, type PaperState } from "./paperEngine"
-import { analyzeStock, emaSeries, indexOnOrBefore, marketLight, type Candle, type MarketLight, type StockSnapshot } from "./scanner"
+import { stepPaper, type PaperExitReason, type PaperState } from "./paperEngine"
+import { analyzeStock, emaSeries, marketLight, type Candle, type MarketLight, type StockSnapshot } from "./scanner"
 import { escapeHtml, sendMessage } from "./telegram"
-import { constitutionEmails } from "@/lib/access"
-import { checkOpenPosition, type PositionCheck } from "./tracking"
+import { checkOpenPosition } from "./tracking"
 
 // ---------------------------------------------------------------------------
 // Who automation runs for: accounts in CONSTITUTION_EMAILS that have constitution mode switched on.
@@ -29,6 +31,8 @@ export async function activeConstitutionUsers(): Promise<string[]> {
 }
 
 const appUrl = () => (process.env.APP_URL || process.env.NEXTAUTH_URL || "").replace(/\/$/, "")
+const round1 = (n: number) => Math.round(n * 10) / 10
+const round2 = (n: number) => Math.round(n * 100) / 100
 
 // ---------------------------------------------------------------------------
 // Market data and the scan
@@ -73,8 +77,9 @@ export async function loadMarketData(extra: { symbol: string; key: string }[] = 
     return { asOf: light.date, light, candles, keys, universe: stocks, universeSource: source, results, failures }
 }
 
+// Firestore rejects undefined fields, so optional ones are only added when they exist.
 function scanStock(u: UniverseStock, snap: StockSnapshot, md: MarketData): ScanStock {
-    return {
+    const stock: ScanStock = {
         symbol: u.symbol,
         name: u.name,
         sector: u.sector,
@@ -82,11 +87,17 @@ function scanStock(u: UniverseStock, snap: StockSnapshot, md: MarketData): ScanS
         close: snap.close,
         high: snap.high,
         low: snap.low,
-        volumeRatio: Math.round(snap.volumeRatio * 100) / 100,
+        volumeRatio: round2(snap.volumeRatio),
         baseWeeks: snap.baseWeeks,
-        baseRangePct: Math.round(snap.baseRangePct * 10) / 10,
+        baseRangePct: round1(snap.baseRangePct),
         resultsDate: md.results.get(u.symbol) || null,
+        changePct: round2(snap.changePct),
+        closeInRangePct: Math.round(snap.closeInRangePct),
+        baseHigh: round2(snap.baseHigh),
+        pctBelow52wHigh: round1((1 - snap.close / snap.high52w) * 100),
     }
+    if (!snap.isBreakout) stock.pctToBreakout = round2(((snap.baseHigh - snap.close) / snap.baseHigh) * 100)
+    return stock
 }
 
 export function buildScan(md: MarketData, now = new Date()): ScanResult {
@@ -101,11 +112,13 @@ export function buildScan(md: MarketData, now = new Date()): ScanResult {
         else if (snap.isBase) bases.push(scanStock(u, snap, md))
     }
     breakouts.sort((a, b) => b.volumeRatio - a.volumeRatio)
-    bases.sort((a, b) => a.baseRangePct - b.baseRangePct)
+    // Nearest to breaking out first; ones already above the base top on weak volume go last.
+    const toBreakout = (s: ScanStock) => (s.pctToBreakout !== undefined && s.pctToBreakout >= 0 ? s.pctToBreakout : 99)
+    bases.sort((a, b) => toBreakout(a) - toBreakout(b))
     return {
         date: md.asOf,
         ranAt: now.toISOString(),
-        marketLight: { close: md.light.close, sma200: Math.round(md.light.sma200 * 100) / 100, green: md.light.green },
+        marketLight: { close: md.light.close, sma200: round2(md.light.sma200), green: md.light.green },
         breakouts,
         bases,
         universeSize: md.universe.length,
@@ -116,7 +129,117 @@ export function buildScan(md: MarketData, now = new Date()): ScanResult {
 }
 
 // ---------------------------------------------------------------------------
-// Paper engine bridge
+// Signals: what Autopilot does with each breakout, and why
+// ---------------------------------------------------------------------------
+
+function weekRange(iso: string) {
+    const d = parseISO(iso)
+    return [toISO(startOfWeek(d, { weekStartsOn: 1 })), toISO(endOfWeek(d, { weekStartsOn: 1 }))] as const
+}
+
+type Decision = SignalDecision & { create: boolean }
+
+export function decideSignals(scan: ScanResult, status: ConstitutionStatus, trades: Trade[], asOf: string): Decision[] {
+    const openAuto = trades.filter(t => t.auto && t.status === "open")
+    const [weekStart, weekEnd] = weekRange(asOf)
+    let weekEntries = trades.filter(t => t.auto && t.date >= weekStart && t.date <= weekEnd).length
+    let openCount = openAuto.length
+    const sectors = new Map<string, number>()
+    for (const t of openAuto) sectors.set((t.sector || "").toLowerCase(), (sectors.get((t.sector || "").toLowerCase()) || 0) + 1)
+
+    return scan.breakouts.map(stock => {
+        const z = computeSizing({ high: stock.high, low: stock.low, equity: status.monthEquity, riskPct: status.riskPct, capPct: status.settings.positionCapPct })
+        const sizing: SizingResult | null = "error" in z ? null : z
+        const decide = (take: boolean, verdict: string, create = false): Decision => ({ stock, sizing, take, verdict, create })
+        const waitText = (s: SizingResult) => `buys above ${inr(s.trigger, 1)} until ${shortDate(addTradingDays(asOf, 3))}`
+
+        const existing = trades.find(t => t.auto && t.symbol === stock.symbol && (t.signalDate === asOf || t.status === "open"))
+        if (existing && existing.signalDate === asOf && sizing) return decide(true, `Paper buy order placed: ${waitText(sizing)}`)
+        if (!scan.marketLight.green) return decide(false, "Skipped: the market light is red, so no new buys")
+        if (!sizing) return decide(false, "Skipped: couldn't size this trade")
+        if (sizing.skip) return decide(false, `Skipped: the stop would be ${sizing.stopDistancePct.toFixed(1)}% below the buy price (8% max)`)
+        if (sizing.shares === 0) return decide(false, "Skipped: no whole share fits your risk")
+        const gap = stock.resultsDate ? tradingDaysBetween(asOf, stock.resultsDate) : null
+        if (gap !== null && gap >= 0 && gap <= RESULTS_BUFFER_TRADING_DAYS) return decide(false, `Skipped: results on ${shortDate(stock.resultsDate!)}, within 10 trading days`)
+        if (existing) return decide(false, existing.entryPrice ? `Already holding it (bought ${shortDate(existing.date)})` : "Already waiting to buy it")
+        if (openCount >= MAX_OPEN_POSITIONS) return decide(false, `Skipped: Autopilot already has ${MAX_OPEN_POSITIONS} positions`)
+        const sector = stock.sector.toLowerCase()
+        if ((sectors.get(sector) || 0) >= MAX_PER_SECTOR) return decide(false, `Skipped: already ${MAX_PER_SECTOR} ${stock.sector} positions`)
+        if (weekEntries >= MAX_ENTRIES_PER_WEEK) return decide(false, `Skipped: ${MAX_ENTRIES_PER_WEEK} new entries this week already`)
+
+        openCount++
+        weekEntries++
+        sectors.set(sector, (sectors.get(sector) || 0) + 1)
+        return decide(true, `Paper buy order placed: ${waitText(sizing)}`, true)
+    })
+}
+
+function entryLog(stock: ScanStock, z: SizingResult, md: MarketData): string {
+    const l = md.light
+    const gapPct = ((l.close - l.sma200) / l.sma200) * 100
+    const read = readSetup(stock, z.stopDistancePct)
+    const move = stock.changePct !== undefined ? ` (${stock.changePct >= 0 ? "+" : ""}${stock.changePct.toFixed(1)}% on the day)` : ""
+    const lines = [
+        `ENTRY · Momentum Breakout signal on ${shortDate(md.asOf)}`,
+        `Market light green: Nifty ${l.close.toLocaleString("en-IN")} is ${gapPct.toFixed(1)}% above its 200-day average.`,
+        `Broke out of a ${stock.baseWeeks}-week base: closed ${inr(stock.close, 2)}${stock.baseHigh ? `, above the base top ${inr(stock.baseHigh, 2)}` : ""}${move}.`,
+    ]
+    if (read.strengths.length) lines.push(`Why: ${capitalise(read.strengths.join("; "))}.`)
+    if (read.cautions.length) lines.push(`Watch: ${capitalise(read.cautions.join("; "))}.`)
+    lines.push(`Plan: buy above ${inr(z.trigger, 1)} (limit ${inr(z.limit, 1)}), stop ${inr(z.stop, 1)} (${z.stopDistancePct.toFixed(1)}% below), ${z.shares} shares, risking ${inr(z.rupeeRisk)} (1R). Breakeven at ${inr(z.breakeven, 1)}, trailing from ${inr(z.trailStart, 1)}.`)
+    lines.push(`Results: ${stock.resultsDate ? shortDate(stock.resultsDate) : "not announced yet"}.`)
+    return lines.join("\n")
+}
+
+const ALL_CHECKLIST = CHECKLIST.map(c => c.id)
+
+function newPaperTrade(d: Decision, md: MarketData): Omit<Trade, "id" | "userId"> {
+    const z = d.sizing!
+    const s = d.stock
+    return {
+        date: md.asOf,
+        time: "15:30",
+        symbol: s.symbol,
+        type: "buy",
+        entryPrice: 0,
+        exitPrice: 0,
+        quantity: z.shares,
+        fees: 0,
+        pnl: 0,
+        analysis: entryLog(s, z, md),
+        rules: [],
+        isPaper: true,
+        tradeQuality: null,
+        setup: SETUP_ID,
+        status: "open",
+        sector: s.sector,
+        marketLight: "green",
+        baseWeeks: s.baseWeeks,
+        volumeRatio: s.volumeRatio,
+        trigger: z.trigger,
+        limitPrice: z.limit,
+        stopPrice: z.stop,
+        resultsDate: s.resultsDate,
+        exitDate: null,
+        exitReason: null,
+        checklist: ALL_CHECKLIST.filter(id => id !== "exit"),
+        processGrade: "A",
+        repeatNote: "",
+        auto: true,
+        instrumentKey: s.instrumentKey,
+        currentStop: z.stop,
+        gttExpiry: addTradingDays(md.asOf, 3),
+        signalDate: md.asOf,
+        trailActive: false,
+        everAbovePlusOneR: false,
+        pendingExit: null,
+        sessionsHeld: 0,
+        lastProcessedDate: md.asOf,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Paper engine bridge: advance each automated trade and write down what happened
 // ---------------------------------------------------------------------------
 
 const toPaperState = (t: Trade): PaperState => ({
@@ -137,28 +260,90 @@ const toPaperState = (t: Trade): PaperState => ({
     lastProcessedDate: t.lastProcessedDate || t.signalDate || t.date,
 })
 
-const ALL_CHECKLIST = CHECKLIST.map(c => c.id)
-const round2 = (n: number) => Math.round(n * 100) / 100
+function exitPlanText(reason: PaperExitReason, c: Candle, ema20: number | null, s: PaperState): string {
+    const r = s.entry! - s.stop
+    switch (reason) {
+        case "trail": return `closed ${inr(c.close, 2)}, below the 20-day average ${inr(ema20 ?? 0, 2)}; selling at the next open (trailing exit)`
+        case "time": return `15 trading days without a close above +1R (${inr(s.entry! + r, 2)}); selling at the next open (time stop)`
+        case "results": return `results due ${s.resultsDate ? shortDate(s.resultsDate) : "soon"}; selling at the next open, before the announcement`
+        default: return "selling at the next open"
+    }
+}
 
-async function advancePaperTrade(userId: string, t: Trade, md: MarketData): Promise<PaperEvent[]> {
+function soldReasonText(reason: PaperExitReason, c: Candle, before: PaperState): string {
+    const gapped = c.open <= before.currentStop
+    switch (reason) {
+        case "stop": return gapped ? `opened at ${inr(c.open, 2)}, below the stop ${inr(before.currentStop, 2)} (gap down)` : `price fell to the stop ${inr(before.currentStop, 2)}`
+        case "breakeven": return gapped ? `opened below the breakeven stop ${inr(before.currentStop, 2)} (gap down)` : "the breakeven stop at the entry price was hit"
+        case "trail": return "trailing exit after closing below the 20-day average"
+        case "time": return "time stop, 15 days without reaching +1R"
+        case "results": return "sold before the results announcement"
+    }
+}
+
+async function advancePaperTrade(userId: string, t: Trade, md: MarketData): Promise<string[]> {
     const candles = md.candles.get(t.symbol)
     if (!candles) return []
     const ema20 = emaSeries(candles.map(c => c.close), 20)
     const resultsDate = t.resultsDate || md.results.get(t.symbol) || null
-    let state = { ...toPaperState(t), resultsDate }
-    const events: PaperEvent[] = []
+    let state: PaperState = { ...toPaperState(t), resultsDate }
+    const log: string[] = []
+    const lines: string[] = []
+    const sym = `<b>${escapeHtml(t.symbol)}</b>`
+    let closed: { date: string; price: number; reason: PaperExitReason; pnl: number; fees: number } | null = null
     let done = false
+
     for (let i = 0; i < candles.length && !done; i++) {
         const c = candles[i]
         if (c.date <= state.lastProcessedDate || c.date > md.asOf) continue
+        const before = state
         const step = stepPaper(state, c, ema20[i], resultsDate ? tradingDaysBetween(c.date, resultsDate) : null)
         state = step.state
-        events.push(...step.events)
         done = step.done
+        const r = state.entry !== null ? state.entry - state.stop : 0
+        for (const e of step.events) {
+            switch (e.type) {
+                case "filled": {
+                    const how = c.open > before.trigger ? `opened at ${inr(c.open, 2)}, above the trigger` : `rose through the trigger ${inr(before.trigger, 1)}`
+                    log.push(`${shortDate(e.date)}: bought at ${inr(e.price, 2)}, price ${how}.`)
+                    lines.push(`Bought ${sym} at ${inr(e.price, 2)}: price ${how}`)
+                    break
+                }
+                case "expired":
+                    lines.push(`${sym} buy order cancelled: price never reached ${inr(before.trigger, 1)} in 3 trading days`)
+                    break
+                case "missed":
+                    lines.push(`${sym} buy order cancelled: opened at ${inr(e.open, 2)}, above the ${inr(before.limit, 1)} limit`)
+                    break
+                case "breakeven":
+                    log.push(`${shortDate(e.date)}: closed ${inr(c.close, 2)}, above +1.5R (${inr(state.entry! + 1.5 * r, 2)}); stop moved up to the entry price ${inr(e.stop, 2)}.`)
+                    lines.push(`${sym} closed above +1.5R: stop moved up to entry ${inr(e.stop, 2)}, so no loss from here`)
+                    break
+                case "trail-armed":
+                    log.push(`${shortDate(e.date)}: closed above +2R (${inr(state.entry! + 2 * r, 2)}); now sells on the first close below the 20-day average.`)
+                    lines.push(`${sym} reached +2R: now trailing the 20-day average`)
+                    break
+                case "exit-tomorrow": {
+                    const why = exitPlanText(e.reason, c, ema20[i], state)
+                    log.push(`${shortDate(e.date)}: ${why}.`)
+                    lines.push(`${sym}: ${why}`)
+                    break
+                }
+                case "closed": {
+                    const risk = (state.entry! - state.stop) * state.quantity
+                    const result = risk > 0 ? e.pnl / risk : null
+                    const why = soldReasonText(e.reason, c, before)
+                    log.push(`${shortDate(e.date)}: SOLD at ${inr(e.price, 2)}, ${why}. Result ${fmtR(result)} (${signedInr(e.pnl)} after ${inr(e.fees)} costs).`)
+                    lines.push(`Sold ${sym} at ${inr(e.price, 2)}: ${why}, ${fmtR(result)} (${signedInr(e.pnl)})`)
+                    closed = e
+                    break
+                }
+            }
+        }
     }
-    if (events.length === 0 && state.lastProcessedDate === (t.lastProcessedDate || "")) return events
+    if (lines.length === 0 && log.length === 0 && state.lastProcessedDate === (t.lastProcessedDate || "")) return lines
 
-    const closed = events.find((e): e is Extract<PaperEvent, { type: "closed" }> => e.type === "closed")
+    const analysis = [t.analysis, ...log].filter(Boolean).join("\n")
     if (closed) {
         await updateTrade(t.id, {
             status: "closed",
@@ -177,9 +362,10 @@ async function advancePaperTrade(userId: string, t: Trade, md: MarketData): Prom
             sessionsHeld: state.sessionsHeld,
             lastProcessedDate: state.lastProcessedDate,
             resultsDate,
+            analysis,
         }, userId)
     } else if (done) {
-        await deleteTrade(t.id, userId) // GTT expired or the open skipped past the limit: no trade happened
+        await deleteTrade(t.id, userId) // the buy order never filled, so no trade happened
     } else {
         await updateTrade(t.id, {
             date: state.fillDate || t.date,
@@ -191,113 +377,15 @@ async function advancePaperTrade(userId: string, t: Trade, md: MarketData): Prom
             sessionsHeld: state.sessionsHeld,
             lastProcessedDate: state.lastProcessedDate,
             resultsDate,
+            analysis,
         }, userId)
-    }
-    return events
-}
-
-// ---------------------------------------------------------------------------
-// Daily run for one user
-// ---------------------------------------------------------------------------
-
-interface SignalLine { stock: ScanStock; text: string }
-
-const inr = (n: number, digits = 0) => `₹${n.toLocaleString("en-IN", { maximumFractionDigits: digits })}`
-const day = (iso: string) => format(parseISO(iso), "d MMM")
-
-function weekRange(iso: string) {
-    const d = parseISO(iso)
-    return [toISO(startOfWeek(d, { weekStartsOn: 1 })), toISO(endOfWeek(d, { weekStartsOn: 1 }))] as const
-}
-
-async function openNewPaperTrades(userId: string, trades: Trade[], scan: ScanResult, status: ConstitutionStatus, md: MarketData): Promise<SignalLine[]> {
-    const lines: SignalLine[] = []
-    const openAuto = trades.filter(t => t.auto && t.status === "open")
-    const [weekStart, weekEnd] = weekRange(md.asOf)
-    let weekEntries = trades.filter(t => t.auto && t.date >= weekStart && t.date <= weekEnd).length
-
-    for (const stock of scan.breakouts) {
-        const sizing = computeSizing({ high: stock.high, low: stock.low, equity: status.monthEquity, riskPct: status.riskPct, capPct: status.settings.positionCapPct })
-        if ("error" in sizing) continue
-        const plan = `GTT buy ${inr(sizing.trigger, 1)} → limit ${inr(sizing.limit, 1)} · stop ${inr(sizing.stop, 1)} (${sizing.stopDistancePct.toFixed(1)}%) · ${sizing.shares} sh · risk ${inr(sizing.rupeeRisk)}`
-        const header = `• <b>${escapeHtml(stock.symbol)}</b> (${escapeHtml(stock.sector)}) close ${inr(stock.close, 2)} · vol ${stock.volumeRatio}× · base ${stock.baseWeeks}w`
-        const say = (verdict: string) => lines.push({ stock, text: `${header}\n  ${sizing.skip ? "" : plan + "\n  "}${verdict}` })
-
-        const resultsGap = stock.resultsDate ? tradingDaysBetween(md.asOf, stock.resultsDate) : null
-        if (sizing.skip) { say(`Skip: stop ${sizing.stopDistancePct.toFixed(1)}% below entry, wider than 8%.`); continue }
-        if (sizing.shares === 0) { say("Skip: 0 shares at this risk."); continue }
-        if (resultsGap !== null && resultsGap >= 0 && resultsGap <= RESULTS_BUFFER_TRADING_DAYS) { say(`Skip: results on ${day(stock.resultsDate!)}, within 10 trading days.`); continue }
-        const resultsNote = stock.resultsDate ? `Results ${day(stock.resultsDate)}.` : "Results date not announced yet — check before a live buy."
-
-        if (trades.some(t => t.auto && t.symbol === stock.symbol && t.signalDate === md.asOf) || openAuto.some(t => t.symbol === stock.symbol)) {
-            say(`Paper: already tracking. ${resultsNote}`)
-            continue
-        }
-        const sectorCount = openAuto.filter(t => (t.sector || "").toLowerCase() === stock.sector.toLowerCase()).length
-        if (openAuto.length >= MAX_OPEN_POSITIONS) { say(`Paper: not taken, ${MAX_OPEN_POSITIONS} paper positions open. ${resultsNote}`); continue }
-        if (sectorCount >= MAX_PER_SECTOR) { say(`Paper: not taken, ${MAX_PER_SECTOR} ${escapeHtml(stock.sector)} positions open. ${resultsNote}`); continue }
-        if (weekEntries >= MAX_ENTRIES_PER_WEEK) { say(`Paper: not taken, ${MAX_ENTRIES_PER_WEEK} entries this week. ${resultsNote}`); continue }
-
-        const trade: Omit<Trade, "id" | "userId"> = {
-            date: md.asOf,
-            time: "15:30",
-            symbol: stock.symbol,
-            type: "buy",
-            entryPrice: 0,
-            exitPrice: 0,
-            quantity: sizing.shares,
-            fees: 0,
-            pnl: 0,
-            analysis: `Auto paper trade from the ${md.asOf} scan: close ${inr(stock.close, 2)}, volume ${stock.volumeRatio}×, ${stock.baseWeeks}-week base.`,
-            rules: [],
-            isPaper: true,
-            tradeQuality: null,
-            setup: SETUP_ID,
-            status: "open",
-            sector: stock.sector,
-            marketLight: "green",
-            baseWeeks: stock.baseWeeks,
-            volumeRatio: stock.volumeRatio,
-            trigger: sizing.trigger,
-            limitPrice: sizing.limit,
-            stopPrice: sizing.stop,
-            resultsDate: stock.resultsDate,
-            exitDate: null,
-            exitReason: null,
-            checklist: ALL_CHECKLIST.filter(id => id !== "exit"),
-            processGrade: "A",
-            repeatNote: "",
-            auto: true,
-            instrumentKey: stock.instrumentKey,
-            currentStop: sizing.stop,
-            gttExpiry: addTradingDays(md.asOf, 3),
-            signalDate: md.asOf,
-            trailActive: false,
-            everAbovePlusOneR: false,
-            pendingExit: null,
-            sessionsHeld: 0,
-            lastProcessedDate: md.asOf,
-        }
-        const saved = await saveTrade(trade, userId)
-        openAuto.push(saved)
-        weekEntries++
-        say(`Paper: GTT placed. ${resultsNote}`)
     }
     return lines
 }
 
-function describePaperEvent(symbol: string, e: PaperEvent): string {
-    const s = `<b>${escapeHtml(symbol)}</b>`
-    switch (e.type) {
-        case "filled": return `${s} filled at ${inr(e.price, 2)} (${day(e.date)})`
-        case "expired": return `${s} buy GTT expired after 3 days`
-        case "missed": return `${s} opened at ${inr(e.open, 2)}, above the limit: missed`
-        case "breakeven": return `${s} stop moved to breakeven ${inr(e.stop, 2)}`
-        case "trail-armed": return `${s} reached +2R: trailing on the 20-EMA`
-        case "exit-tomorrow": return `${s} exits at the next open (${e.reason})`
-        case "closed": return `${s} closed at ${inr(e.price, 2)} (${e.reason}), ${e.pnl >= 0 ? "+" : "−"}${inr(Math.abs(e.pnl))}`
-    }
-}
+// ---------------------------------------------------------------------------
+// The evening run for one user
+// ---------------------------------------------------------------------------
 
 export interface UserRunResult {
     userId: string
@@ -307,58 +395,59 @@ export interface UserRunResult {
     error?: string
 }
 
+function lastCloseOnOrBefore(candles: Candle[] | undefined, date: string) {
+    if (!candles) return null
+    for (let i = candles.length - 1; i >= 0; i--) if (candles[i].date <= date) return candles[i].close
+    return null
+}
+
 export async function runDailyForUser(userId: string, md: MarketData, scan: ScanResult, trades: Trade[], opts: { force?: boolean } = {}): Promise<UserRunResult> {
     const automation = await getAutomation(userId)
     if (!opts.force && automation?.lastRunDate === md.asOf) return { userId, skipped: true, sent: false, message: "" }
     const [constitution, breaches] = await Promise.all([getConstitution(userId), getBreaches(userId)])
 
-    // 1. Advance automated paper trades through the new sessions.
-    const paperLines: string[] = []
+    // 1. Move existing automated trades through the new sessions.
+    const autopilotLines: string[] = []
     for (const t of trades.filter(t => t.auto && t.status === "open")) {
-        const events = await advancePaperTrade(userId, t, md)
-        for (const e of events) paperLines.push(describePaperEvent(t.symbol, e))
+        autopilotLines.push(...await advancePaperTrade(userId, t, md))
     }
-    const freshTrades = await getTrades(userId)
-    const status = computeStatus(constitution, freshTrades, breaches, md.asOf)
+    let fresh = await getTrades(userId)
+    const status = computeStatus(constitution, fresh, breaches, md.asOf)
 
-    // 2. Tonight's signals; with a green light they also become paper trades.
-    const signalLines = scan.marketLight.green ? await openNewPaperTrades(userId, freshTrades, scan, status, md) : []
+    // 2. Decide on tonight's breakouts; place paper buy orders for the ones that qualify.
+    const decisions = decideSignals(scan, status, fresh, md.asOf)
+    for (const d of decisions.filter(d => d.create)) {
+        await saveTrade(newPaperTrade(d, md), userId)
+        autopilotLines.push(`Placed a paper buy order for <b>${escapeHtml(d.stock.symbol)}</b>: buys above ${inr(d.sizing!.trigger, 1)} until ${shortDate(addTradingDays(md.asOf, 3))}`)
+    }
+    if (decisions.some(d => d.create)) fresh = await getTrades(userId)
 
-    // 3. Your own open positions (live, and manual paper trades).
-    const checks: (PositionCheck & { paper: boolean })[] = freshTrades
+    // 3. Where every open position stands.
+    const openAuto: OpenAutoPosition[] = fresh
+        .filter(t => t.auto && t.status === "open")
+        .sort((a, b) => Number(!a.entryPrice) - Number(!b.entryPrice) || a.date.localeCompare(b.date))
+        .map(t => {
+            const close = lastCloseOnOrBefore(md.candles.get(t.symbol), md.asOf)
+            const r = t.entryPrice && t.stopPrice ? t.entryPrice - t.stopPrice : 0
+            return {
+                symbol: t.symbol,
+                pending: !t.entryPrice,
+                trigger: t.trigger || 0,
+                gttExpiry: t.gttExpiry || md.asOf,
+                entry: t.entryPrice,
+                stop: t.stopPrice || 0,
+                currentStop: t.currentStop ?? t.stopPrice ?? 0,
+                close,
+                rNow: close !== null && r > 0 ? (close - t.entryPrice) / r : null,
+            }
+        })
+    const manualChecks = fresh
         .filter(t => isBreakout(t) && t.status === "open" && !t.auto && t.date >= status.settings.startDate)
         .map(t => ({ ...checkOpenPosition(t, md.candles.get(t.symbol) || [], md.asOf, t.resultsDate || md.results.get(t.symbol) || null), paper: !!t.isPaper }))
 
-    // 4. Compose the evening digest.
-    const out: string[] = [`<b>TradeHow · ${format(parseISO(md.asOf), "EEE d MMM")}</b>`]
-    const l = scan.marketLight
-    out.push(`Market light: ${l.green ? "🟢 GREEN" : "🔴 RED"} · Nifty ${l.close.toLocaleString("en-IN")} vs 200-SMA ${Math.round(l.sma200).toLocaleString("en-IN")}`)
-    if (!l.green) out.push("No new buys tonight. Open trades keep their stops and exits.")
-    if (status.blockers.length) out.push(`⛔ Live entries paused: ${escapeHtml(status.blockers.map(b => b.message).join(" "))}`)
+    const message = composeDailyDigest({ asOf: md.asOf, scan, decisions, autopilotLines, openAuto, manualChecks, status, appUrl: appUrl() })
 
-    out.push("", `<b>Signals</b> (MB breakout)`)
-    if (!l.green) out.push(scan.breakouts.length ? `${scan.breakouts.length} stock(s) broke out, but the light is red.` : "None.")
-    else if (signalLines.length === 0) out.push("No breakouts tonight — that's the system working.")
-    else out.push(...signalLines.slice(0, 8).map(s => s.text), ...(signalLines.length > 8 ? [`…and ${signalLines.length - 8} more in the app.`] : []))
-
-    if (checks.length) {
-        out.push("", "<b>Your open positions</b>")
-        for (const c of checks) {
-            const r = c.rNow === null ? "" : ` ${c.rNow >= 0 ? "+" : ""}${c.rNow.toFixed(2)}R`
-            out.push(`• <b>${escapeHtml(c.symbol)}</b>${c.paper ? " (paper)" : ""}${r}${c.close ? ` · close ${inr(c.close, 2)}` : ""}`)
-            for (const a of c.actions) out.push(`  ⚠️ ${escapeHtml(a)}`)
-            for (const n of c.notes) out.push(`  ${escapeHtml(n)}`)
-        }
-    }
-    if (paperLines.length) out.push("", "<b>Auto paper</b>", ...paperLines.map(p => `• ${p}`))
-
-    const autoOpen = freshTrades.filter(t => t.auto && t.status === "open").length
-    out.push("", `1R ${inr(status.oneR)} (${status.riskPct}%) · live open ${status.openPositions.length}/${MAX_OPEN_POSITIONS} · live entries this week ${status.weekEntries}/${MAX_ENTRIES_PER_WEEK} · paper open ${autoOpen}/${MAX_OPEN_POSITIONS}`)
-    out.push(`Month realised ${status.monthRealized >= 0 ? "+" : "−"}${inr(Math.abs(status.monthRealized))} (limit −${inr(status.monthLossLimit)})`)
-    if (appUrl()) out.push(`<a href="${appUrl()}/routine">Open the evening routine</a>`)
-    const message = out.join("\n")
-
-    // 5. Deliver and record.
+    // 4. Deliver and record.
     let sent = false
     let error: string | undefined
     const tg = automation?.telegram
@@ -374,14 +463,15 @@ export async function runDailyForUser(userId: string, md: MarketData, scan: Scan
     await saveAutomation(userId, {
         lastRunDate: md.asOf,
         lastRunAt: new Date().toISOString(),
-        lastSummary: `${scan.breakouts.length} breakout(s), light ${l.green ? "green" : "red"}, ${paperLines.length} paper event(s), ${checks.reduce((a, c) => a + c.actions.length, 0)} action(s)`,
+        lastSummary: `${scan.breakouts.length} breakout(s), light ${scan.marketLight.green ? "green" : "red"}, ${autopilotLines.length} Autopilot action(s)`,
         lastError: error || null,
+        lastSignals: decisions.map(d => ({ symbol: d.stock.symbol, take: d.take, verdict: d.verdict })),
         recentMessages: recent,
     })
     return { userId, sent, message, error }
 }
 
-/** The evening job: one scan for everyone, then each user's paper engine, position checks and digest. */
+/** The evening job: one scan for everyone, then each user's Autopilot, position checks and digest. */
 export async function runDaily(userIds: string[], opts: { force?: boolean; now?: Date } = {}) {
     const now = opts.now || new Date()
     const tradesByUser = new Map<string, Trade[]>()
@@ -414,11 +504,10 @@ export async function runDaily(userIds: string[], opts: { force?: boolean; now?:
 // Saturday review
 // ---------------------------------------------------------------------------
 
-const fmtR = (r: number | null) => (r === null ? "—" : `${r >= 0 ? "+" : ""}${r.toFixed(2)}R`)
 const statLine = (label: string, s: ReviewStats) =>
     s.trades === 0
         ? `${label}: no closed trades`
-        : `${label}: ${s.trades} closed · win ${s.winRate?.toFixed(0)}% · exp ${fmtR(s.expectancyR)} · avg loss ${fmtR(s.avgLossR)} · adherence ${s.adherencePct?.toFixed(0)}% · ${s.netPnl >= 0 ? "+" : "−"}${inr(Math.abs(s.netPnl))}`
+        : `${label}: ${s.trades} closed · win ${s.winRate?.toFixed(0)}% · average ${fmtR(s.expectancyR)} per trade · ${signedInr(s.netPnl)}`
 
 export async function runWeekly(userIds: string[], now = new Date()) {
     const today = istToday(now)
@@ -430,24 +519,28 @@ export async function runWeekly(userIds: string[], now = new Date()) {
             const [trades, constitution, breaches, automation] = await Promise.all([getTrades(userId), getConstitution(userId), getBreaches(userId), getAutomation(userId)])
             const status = computeStatus(constitution, trades, breaches, today)
             const closedThisWeek = (t: Trade) => isBreakout(t) && t.status !== "open" && realizedDate(t) >= weekStart && realizedDate(t) <= today && t.date >= status.settings.startDate
-            const live = reviewStats(trades.filter(t => closedThisWeek(t) && !t.isPaper))
-            const manualPaper = reviewStats(trades.filter(t => closedThisWeek(t) && t.isPaper && !t.auto))
-            const autoWeek = reviewStats(trades.filter(t => closedThisWeek(t) && t.auto))
+            const autoWeek = trades.filter(t => closedThisWeek(t) && t.auto)
             const autoAll = reviewStats(trades.filter(t => t.auto && t.status !== "open"))
+            const live = reviewStats(trades.filter(t => closedThisWeek(t) && !t.isPaper))
             const bt = status.settings.backtest
 
-            const out = [`<b>Weekly review · week of ${day(weekStart)}</b>`, statLine("Live", live), statLine("Paper (yours)", manualPaper), statLine("Auto paper", autoWeek)]
-            out.push(`Forward test so far: ${autoAll.trades} trades · exp ${fmtR(autoAll.expectancyR)}${bt?.expectancy != null ? ` vs backtest ${fmtR(bt.expectancy)}` : ""} · longest losing run ${autoAll.longestLosingStreak}`)
-            if (status.consequences.active.length) {
-                out.push("", "<b>Active consequences</b>", ...status.consequences.active.map(c => `• Level ${c.level}: ${escapeHtml(breachLabel(c.code))} (${day(c.date)})`))
+            const out = [`<b>Weekly review · week of ${shortDate(weekStart)}</b>`, statLine("Autopilot this week", reviewStats(autoWeek))]
+            for (const t of autoWeek) {
+                const risk = t.entryPrice && t.stopPrice ? (t.entryPrice - t.stopPrice) * t.quantity : 0
+                out.push(`• ${escapeHtml(t.symbol)}: ${fmtR(risk > 0 ? t.pnl / risk : null)} (${signedInr(t.pnl)}), ${escapeHtml(t.exitReason || "")}`)
             }
-            if (scan?.bases.length) {
-                out.push("", `<b>MB bases watchlist</b> (${scan.bases.length}, tightest first)`, ...scan.bases.slice(0, 12).map(b => `• ${escapeHtml(b.symbol)} (${escapeHtml(b.sector)}) range ${b.baseRangePct}% · ${b.baseWeeks}w · base top ${inr(b.high, 2)}`))
+            if (live.trades) out.push(statLine("Live (real money)", live))
+            out.push("", `<b>Forward test so far</b>: ${autoAll.trades} trades · win ${autoAll.winRate?.toFixed(0) ?? "—"}% · average ${fmtR(autoAll.expectancyR)}${bt?.expectancy != null ? ` (backtest ${fmtR(bt.expectancy)})` : ""} · longest losing run ${autoAll.longestLosingStreak}`)
+            if (status.consequences.active.length) {
+                out.push("", "<b>Active consequences</b>", ...status.consequences.active.map(c => `• Level ${c.level}: ${escapeHtml(breachLabel(c.code))} (${shortDate(c.date)})`))
+            }
+            const near = (scan?.bases || []).filter(b => b.pctToBreakout !== undefined && b.pctToBreakout >= 0).slice(0, 10)
+            if (near.length) {
+                out.push("", `<b>👀 Watchlist: closest to breaking out</b>`, ...near.map(b => `• ${escapeHtml(b.symbol)} (${escapeHtml(b.sector)}) ${b.pctToBreakout!.toFixed(1)}% below ${inr(b.baseHigh ?? b.high, 1)} · ${b.baseRangePct}% range · ${b.baseWeeks}w`))
             }
             if (Number(today.slice(8, 10)) <= 7 && status.monthlyCloseDue) {
-                out.push("", "📅 First weekend of the month: do the monthly close (value equity, reset 1R and the cap).")
+                out.push("", "📅 First weekend of the month: do the monthly close in Autopilot → Settings.")
             }
-            out.push("", "Compare each number with the backtest's range. Rule changes only at a phase boundary — never mid-week, never after a loss.")
             const message = out.join("\n")
 
             let sent = false
@@ -465,67 +558,3 @@ export async function runWeekly(userIds: string[], now = new Date()) {
     return { date: today, users: results }
 }
 
-// ---------------------------------------------------------------------------
-// One stock on demand (auto-fill in the trade form and sizing calculator)
-// ---------------------------------------------------------------------------
-
-export interface SymbolSetup {
-    symbol: string
-    name: string
-    sector: string
-    breakoutDate: string
-    isBreakout: boolean
-    checks: StockSnapshot["checks"]
-    high: number
-    low: number
-    close: number
-    volumeRatio: number
-    baseWeeks: number
-    marketLight: "green" | "red"
-    niftyClose: number
-    niftySma200: number
-    resultsDate: string | null
-}
-
-export async function analyzeSymbol(symbol: string, date: string | null, now = new Date()): Promise<SymbolSetup | { error: string }> {
-    let stock = findInUniverse([], symbol)
-    if (!stock) stock = findInUniverse((await loadUniverse()).stocks, symbol)
-    if (!stock) return { error: `${symbol.toUpperCase()} isn't in the Nifty 200, so it's outside the setup.` }
-
-    const withToday = afterClose(now)
-    const [candles, nifty, results] = await Promise.all([
-        fetchDailyCandles(instrumentKey(stock.isin), { withToday, now }),
-        fetchDailyCandles(NIFTY50_KEY, { withToday, now }),
-        fetchResultsCalendar(),
-    ])
-    const target = indexOnOrBefore(candles, date || candles[candles.length - 1]?.date || "")
-    if (target < 0) return { error: "No market data for that date." }
-
-    // A plan is journaled on the breakout evening and filled up to 3 sessions later, so look back for the breakout.
-    let index = target
-    for (let k = 0; k <= 3; k++) {
-        if (analyzeStock(candles, target - k)?.isBreakout) { index = target - k; break }
-    }
-    const snap = analyzeStock(candles, index)
-    if (!snap) return { error: "Not enough history for the 200-day average." }
-    const light = marketLight(nifty, indexOnOrBefore(nifty, snap.date))
-    if (!light) return { error: "Not enough Nifty 50 history." }
-
-    return {
-        symbol: stock.symbol,
-        name: stock.name,
-        sector: stock.sector,
-        breakoutDate: snap.date,
-        isBreakout: snap.isBreakout,
-        checks: snap.checks,
-        high: snap.high,
-        low: snap.low,
-        close: snap.close,
-        volumeRatio: Math.round(snap.volumeRatio * 100) / 100,
-        baseWeeks: snap.baseWeeks,
-        marketLight: light.green ? "green" : "red",
-        niftyClose: light.close,
-        niftySma200: Math.round(light.sma200 * 100) / 100,
-        resultsDate: results.get(stock.symbol) || null,
-    }
-}

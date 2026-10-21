@@ -12,7 +12,7 @@ import { saveConstitutionAction } from "@/app/actions"
 import { useData } from "@/shared/context/DataContext"
 import { PHASES } from "../lib/rules"
 import { computeStatus, toISO, type ConstitutionStatus } from "../lib/engine"
-import { inr } from "./ConstitutionStatusPanel"
+import { inr } from "../lib/format"
 
 export function ConstitutionSettingsDialog({ open, onOpenChange, status }: { open: boolean; onOpenChange: (open: boolean) => void; status: ConstitutionStatus }) {
     const { constitution, trades, breaches, setConstitution } = useData()

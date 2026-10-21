@@ -1,6 +1,7 @@
 "use client"
 
 import { TradeForm } from "@/features/trades/components/TradeForm"
+import { AutoTradeDetail } from "@/features/autopilot/components/AutoTrade"
 import { useData } from "@/shared/context/DataContext"
 import { useSession } from "next-auth/react"
 import { useRouter, useParams } from "next/navigation"
@@ -36,7 +37,7 @@ export default function EditTradePage() {
 
     return (
         <div className="w-full h-full max-w-4xl mx-auto pb-12">
-            <TradeForm rules={rules} initialData={trade} id={id} />
+            {trade.auto ? <AutoTradeDetail trade={trade} /> : <TradeForm rules={rules} initialData={trade} id={id} />}
         </div>
     )
 }

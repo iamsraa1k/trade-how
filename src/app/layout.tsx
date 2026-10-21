@@ -6,6 +6,8 @@ import { Toaster } from "@/shared/components/ui/sonner";
 import { MainLayout } from "@/shared/components/layout/MainLayout";
 import { SplashScreen } from "@/shared/components/ui/SplashScreen";
 import NextTopLoader from 'nextjs-toploader';
+import type { Metadata, Viewport } from "next";
+import { ServiceWorkerRegister } from "@/shared/components/ServiceWorkerRegister";
 
 import { Inter } from "next/font/google";
 import { getServerSession } from "next-auth/next";
@@ -17,9 +19,15 @@ import { canUseConstitution } from "@/lib/access";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "TradeHow | Professional Trading Journal",
   description: "Enterprise-grade personal trading journal assistant",
+  applicationName: "TradeHow",
+  appleWebApp: { capable: true, title: "TradeHow", statusBarStyle: "black-translucent" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#09090b",
 };
 
 export default async function RootLayout({
@@ -59,6 +67,7 @@ export default async function RootLayout({
           "bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-50/20 via-background to-background dark:from-indigo-950/20 dark:via-background dark:to-background"
         )}
       >
+        <ServiceWorkerRegister />
         <NextTopLoader
           color="#6366f1"
           initialPosition={0.08}

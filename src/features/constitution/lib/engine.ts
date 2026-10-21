@@ -403,132 +403,6 @@ export function computeStatus(raw: ConstitutionSettings | null, trades: Trade[],
 }
 
 // ---------------------------------------------------------------------------
-// Rule checks for one trade
-// ---------------------------------------------------------------------------
-
-export interface Finding { code: string; level: R.BreachLevel | null; message: string }
-
-export interface TradeDraft {
-    id?: string
-    date: string
-    isPaper: boolean
-    status: "open" | "closed"
-    sector: string
-    marketLight: "green" | "red" | ""
-    baseWeeks: number | null
-    volumeRatio: number | null
-    entryPrice: number | null
-    limitPrice: number | null
-    stopPrice: number | null
-    quantity: number | null
-    resultsDate: string | null
-    exitReason: string
-}
-
-const inr = (n: number) => n.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 })
-
-export function evaluateTrade(draft: TradeDraft, status: ConstitutionStatus, trades: Trade[]): Finding[] {
-    const findings: Finding[] = []
-    const levels = tradeLevels({
-        entryPrice: draft.entryPrice || 0,
-        limitPrice: draft.limitPrice,
-        stopPrice: draft.stopPrice,
-        quantity: draft.quantity || 0,
-        date: draft.date,
-        status: draft.status,
-    })
-    const equity = status.monthEquities[monthOf(draft.date)] ?? status.monthEquity
-    const oneR = equity * status.riskPct / 100
-    const cap = equity * status.settings.positionCapPct / 100
-    const entry = levels.entry
-
-    if (!draft.stopPrice) {
-        findings.push({ code: "no_stop", level: 3, message: "No stop price. Every trade needs a stop GTT by the evening of the fill." })
-    } else if (entry && draft.stopPrice >= entry) {
-        findings.push({ code: "invalid_stop", level: null, message: "The stop must be below the entry price." })
-    }
-    if (levels.plannedRisk !== null && levels.plannedRisk > oneR + 1) {
-        findings.push({ code: "risk_over", level: 3, message: `Risk ${inr(levels.plannedRisk)} is above 1R (${inr(oneR)} at ${status.riskPct}%).` })
-    }
-    if (levels.positionValue !== null && levels.positionValue > cap + 1) {
-        findings.push({ code: "position_over", level: 3, message: `Position ${inr(levels.positionValue)} is above the ${status.settings.positionCapPct}% cap (${inr(cap)}).` })
-    }
-    if (levels.stopDistancePct !== null) {
-        if (levels.stopDistancePct > R.MAX_STOP_PCT + 0.005) {
-            findings.push({ code: "stop_too_wide", level: 2, message: `Stop is ${levels.stopDistancePct.toFixed(1)}% below entry. Wider than 8% means skip.` })
-        } else if (levels.stopDistancePct < R.MIN_STOP_PCT - 0.005) {
-            findings.push({ code: "stop_too_tight", level: null, message: `Stop is only ${levels.stopDistancePct.toFixed(1)}% below entry. The plan lowers it to exactly 3%.` })
-        }
-    }
-    if (draft.marketLight === "red") {
-        findings.push({ code: "red_light", level: 2, message: "Market light was red: no new buys." })
-    } else if (!draft.marketLight) {
-        findings.push({ code: "light_missing", level: null, message: "Record the market light (Nifty 50 vs its 200-day SMA)." })
-    }
-    if (draft.volumeRatio !== null && draft.volumeRatio < R.MIN_VOLUME_RATIO) {
-        findings.push({ code: "no_signal", level: 2, message: `Volume ratio ${draft.volumeRatio}× is below 1.5×, so it wasn't a scan signal.` })
-    }
-    if (draft.baseWeeks !== null && (draft.baseWeeks < 3 || draft.baseWeeks > 8)) {
-        findings.push({ code: "base_length", level: null, message: `A ${draft.baseWeeks}-week base is outside the usual 3–8 weeks. Check it wasn't a V or a spike.` })
-    }
-    if (draft.resultsDate) {
-        const gap = tradingDaysBetween(draft.date, draft.resultsDate)
-        if (gap >= 0 && gap <= R.RESULTS_BUFFER_TRADING_DAYS) {
-            findings.push({ code: "results_window", level: 2, message: `Results are ${gap} trading days after entry. The rule needs more than 10.` })
-        }
-    } else {
-        findings.push({ code: "results_missing", level: null, message: "Add the next results date (NSE board-meeting notice)." })
-    }
-
-    const pool = trades.filter(t => isBreakout(t) && t.id !== draft.id && !!t.isPaper === draft.isPaper && t.date >= status.settings.startDate)
-    const weekStart = toISO(startOfWeek(parseISO(draft.date), { weekStartsOn: 1 }))
-    const weekEnd = toISO(endOfWeek(parseISO(draft.date), { weekStartsOn: 1 }))
-    const sameWeek = pool.filter(t => t.date >= weekStart && t.date <= weekEnd).length
-    if (sameWeek >= R.MAX_ENTRIES_PER_WEEK) {
-        findings.push({ code: "weekly_limit", level: 2, message: `This is entry ${sameWeek + 1} in its week. The limit is 3; extra signals go in the impulse log.` })
-    }
-    if (draft.status === "open") {
-        const open = pool.filter(t => t.status === "open")
-        const sector = draft.sector.trim().toLowerCase()
-        const sameSector = sector ? open.filter(t => (t.sector || "").trim().toLowerCase() === sector).length : 0
-        if (open.length >= R.MAX_OPEN_POSITIONS) {
-            findings.push({ code: "position_limit", level: 2, message: `${open.length} positions already open. The limit is 4.` })
-        } else if (sameSector >= R.MAX_PER_SECTOR) {
-            findings.push({ code: "position_limit", level: 2, message: `${sameSector} ${draft.sector} positions already open. The limit is 2 per sector.` })
-        }
-        if (!draft.sector.trim()) {
-            findings.push({ code: "sector_missing", level: null, message: "Add the sector so the 2-per-sector limit can be checked." })
-        }
-    } else if (!draft.exitReason) {
-        findings.push({ code: "exit_missing", level: null, message: "Pick the exit reason." })
-    } else if (draft.exitReason === "other") {
-        findings.push({ code: "exit_other", level: null, message: "The exit didn't come from a written rule (checklist item 7)." })
-    }
-
-    if (!draft.isPaper && !draft.id) {
-        for (const b of status.blockers) findings.push({ code: `blocked_${b.kind}`, level: null, message: b.message })
-    }
-    return findings
-}
-
-export type Grade = "A" | "B" | "C"
-
-// A = every rule, B = one minor slip, C = any size, stop or setup breach.
-export function suggestGrade(checklist: string[], isOpen: boolean, findings: Finding[]): Grade {
-    if (findings.some(f => f.level !== null && f.level >= 2)) return "C"
-    const missed = R.CHECKLIST.filter(i => !(isOpen && i.needsExit) && !checklist.includes(i.id))
-    if (missed.length === 0) return "A"
-    if (missed.length === 1 && missed[0].minor) return "B"
-    return "C"
-}
-
-export const GRADE_INFO: Record<Grade, { label: string; description: string }> = {
-    A: { label: "Grade A", description: "Every rule" },
-    B: { label: "Grade B", description: "One minor slip" },
-    C: { label: "Grade C", description: "Size, stop or setup breach" },
-}
-
-// ---------------------------------------------------------------------------
 // Review stats (weekly review, gates)
 // ---------------------------------------------------------------------------
 
@@ -606,10 +480,10 @@ export function evaluateBacktest(bt: BacktestResult | null) {
     return { rows, passed }
 }
 
-// Stage 2 tests your own routine, so automated paper trades (a forward test of the setup) don't count here.
+// With Autopilot placing the trades, its paper trades are the paper stage (yours count too).
 export function paperStage(trades: Trade[], settings: ResolvedSettings, today = todayISO()) {
     const paper = trades
-        .filter(t => isBreakout(t) && t.isPaper && !t.auto && t.status !== "open" && t.date >= settings.startDate)
+        .filter(t => isBreakout(t) && t.isPaper && t.status !== "open" && t.date >= settings.startDate)
         .sort((a, b) => a.date.localeCompare(b.date))
     const stats = reviewStats(paper)
     const first = paper[0]?.date || null
